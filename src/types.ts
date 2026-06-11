@@ -1,8 +1,9 @@
 // 후로(공개 멘쯔) 한 벌
 export interface OpenMeld {
-  open: boolean      // true=공개(밍커/치/밍깡), false=안깡
-  tiles: number[]    // 타일 인덱스 배열 (3 또는 4장)
-  rotatedIndex?: number // 꺾어서 표시할 타일 위치(0,1,2). 안깡(open=false)이면 없음
+  open: boolean      // true=공개(치/퐁/대명깡/가깡), false=안깡
+  tiles: number[]    // 타일 인덱스 배열 (3 또는 4장=깡)
+  rotatedIndex?: number // 꺾어서 표시할 타일 위치. 안깡(open=false)이면 없음
+  added?: boolean    // 가깡(소명깡): 꺾인 패 위에 4번째 타일 스택
 }
 
 // 한 문제의 상황(出題)
