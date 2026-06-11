@@ -31,7 +31,7 @@ export default function App() {
   const scoreTableSrc = `${import.meta.env.BASE_URL}score.png`
 
   return (
-    <div className="mx-auto flex min-h-full max-w-md flex-col px-4 pb-8 pt-[max(1rem,env(safe-area-inset-top))]">
+    <div className="mx-auto flex min-h-full max-w-md flex-col px-4 pb-8 pt-[max(1rem,env(safe-area-inset-top))] landscape:max-w-2xl">
       <header className="mb-4 flex items-center justify-between">
         <h1 className="text-base font-bold tracking-tight">
           리치마작 점수계산 <span className="text-jade">연습</span>
