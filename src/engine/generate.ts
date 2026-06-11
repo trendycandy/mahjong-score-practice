@@ -12,7 +12,7 @@ function pick<T>(arr: T[]): T {
 
 // 출제 빈도 (튜닝 가능)
 const CHIITOI = 0.03   // 치또이츠 핸드 확률
-const KAN_HAND = 0.07  // 깡 핸드 확률(표준형 한정)
+const KAN_HAND = 0.1   // 깡 슬롯 시도율(canWin 필터로 줄어들어 출제율 ≈ 7%)
 const KAN2 = 0.1       // 깡 핸드 중 2깡
 const KAN3 = 0.001     // 깡 핸드 중 3깡
 
@@ -169,9 +169,11 @@ export interface Generated {
 
 // 한 문제 생성. allowNoYaku=true 면 '역 없음(화료 불가)' 문제도 채택.
 export function generateQuestion(allowNoYaku = true): Generated {
+  // 핸드 종류를 문제당 1회 결정 → 재시도 루프가 빈도를 왜곡하지 않게 함(치또이 출제율 ≈ CHIITOI)
+  const wantChiitoi = Math.random() < CHIITOI
   for (let attempt = 0; attempt < 300; attempt++) {
     // ── 치또이츠 경로 (표준형과 배타) ──
-    if (Math.random() < CHIITOI) {
+    if (wantChiitoi) {
       const base = buildChiitoitsu()
       if (!base) continue
       const s = rollSituation(true, 0)
