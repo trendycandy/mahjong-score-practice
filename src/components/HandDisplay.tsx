@@ -1,4 +1,5 @@
 import Tile from './Tile'
+import RiichiStick from './RiichiStick'
 import type { Hand } from '../types'
 import { WIND_KO } from '../engine/tiles'
 
@@ -17,7 +18,7 @@ export default function HandDisplay({ hand }: { hand: Hand }) {
   const closedSansWin = hand.isTsumo ? hand.closed.slice(0, -1) : hand.closed
   const sortedClosed = [...closedSansWin].sort((a, b) => a - b)
 
-  // ── 단일 행 사이징: 간격까지 u 단위 분수로 접어 denom 계산 → overflow 불가 ──
+  // ── 단일 행 사이징(간격까지 u 단위 분수로 접어 overflow 불가) ──
   const TILE_GAP = 0.1
   const WIN_GAP = 0.45
   const MELD_GAP = 0.55
@@ -25,30 +26,24 @@ export default function HandDisplay({ hand }: { hand: Hand }) {
   const CAP = 46 // px
 
   const nClosed = sortedClosed.length
-  const meldTileCounts = hand.openMelds.map((m) => m.tiles.length)
-  const rotatedCount = hand.openMelds.reduce(
-    (s, m) => s + (m.open && m.rotatedIndex != null ? 1 : 0),
-    0,
-  )
-  const meldTileTotal = meldTileCounts.reduce((s, n) => s + n, 0)
-  const uprightCount = nClosed + 1 + (meldTileTotal - rotatedCount)
-  const slotWidthSum = uprightCount + rotatedCount * (4 / 3)
-  const gapFractionSum =
-    (nClosed - 1) * TILE_GAP +
-    WIN_GAP +
-    hand.openMelds.length * MELD_GAP +
-    meldTileCounts.reduce((s, n) => s + (n - 1) * MELD_INNER, 0)
+  let slotWidthSum = nClosed + 1 // 닫힌패 + 화료패
+  let gapFractionSum = (nClosed - 1) * TILE_GAP + WIN_GAP
+  for (const m of hand.openMelds) {
+    const rotated = m.open && m.rotatedIndex != null ? 1 : 0
+    const upright = m.tiles.length - rotated
+    slotWidthSum += upright + rotated * (4 / 3)
+    gapFractionSum += MELD_GAP + (m.tiles.length - 1) * MELD_INNER
+  }
   const denom = slotWidthSum + gapFractionSum
 
-  // 행을 container query 컨테이너로 만들어 --u 를 행 폭(cqw) 기준으로 해결.
-  // (100% 는 자식의 내용폭 flex 부모를 가리켜 0으로 붕괴 → cqw 로 행 폭에 고정)
-  const rowStyle = {
+  // 래퍼를 container query 컨테이너로 → 도라 행/손패 행이 같은 --u 공유
+  const wrapperStyle = {
     containerType: 'inline-size',
     ['--u' as string]: `min(calc(100cqw / ${denom}), ${CAP}px)`,
   } as React.CSSProperties
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" style={wrapperStyle}>
       {/* 상황 뱃지 */}
       <div className="flex flex-wrap items-center gap-1.5">
         <Badge>장풍 {WIND_KO[hand.bakaze]}</Badge>
@@ -59,30 +54,25 @@ export default function HandDisplay({ hand }: { hand: Hand }) {
         {hand.ippatsu && <Badge tone="riichi">일발</Badge>}
       </div>
 
-      {/* 도라 / 뒷도라 표시패 */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+      {/* 도라 표시패(+뒷도라, 라벨 하나) + 리치봉 */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <div className="flex items-center gap-2">
           <span className="text-xs text-ivory/50">도라 표시패</span>
-          <div className="flex gap-1">
+          <div className="flex items-end" style={{ gap: `calc(var(--u) * ${TILE_GAP})` }}>
             {hand.doraIndicators.map((d, i) => (
-              <Tile key={i} index={d} size="sm" />
+              <Tile key={`d${i}`} index={d} fluid />
             ))}
+            {hand.riichi &&
+              hand.uraIndicators.map((d, i) => (
+                <Tile key={`u${i}`} index={d} fluid ura />
+              ))}
           </div>
         </div>
-        {hand.riichi && hand.uraIndicators.length > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-sky-400/70">뒷도라 표시패</span>
-            <div className="flex gap-1">
-              {hand.uraIndicators.map((d, i) => (
-                <Tile key={i} index={d} size="sm" ura />
-              ))}
-            </div>
-          </div>
-        )}
+        {hand.riichi && <RiichiStick />}
       </div>
 
-      {/* 손패 — 단일 행 */}
-      <div className="flex flex-nowrap items-end" style={rowStyle}>
+      {/* 손패 — 단일 행 (깡 렌더는 Task 7) */}
+      <div className="flex flex-nowrap items-end">
         {/* 닫힌패 그룹 */}
         <div className="flex items-end" style={{ gap: `calc(var(--u) * ${TILE_GAP})` }}>
           {sortedClosed.map((t, i) => (
@@ -104,17 +94,12 @@ export default function HandDisplay({ hand }: { hand: Hand }) {
             }}
           >
             {m.tiles.map((t, ti) => (
-              <Tile
-                key={ti}
-                index={t}
-                fluid
-                dim={!m.open}
-                rotated={m.open && ti === m.rotatedIndex}
-              />
+              <Tile key={ti} index={t} fluid rotated={m.open && ti === m.rotatedIndex} />
             ))}
           </div>
         ))}
       </div>
+
       <p className="text-xs text-ivory/40">
         붉은 테두리 = 화료패 ({hand.isTsumo ? '쯔모' : '론'}) · 꺾인 패 = 후로
         {hand.riichi && hand.uraIndicators.length > 0 && ' · 파란 테두리 = 뒷도라'}
