@@ -29,10 +29,12 @@ export default function HandDisplay({ hand }: { hand: Hand }) {
   let slotWidthSum = nClosed + 1 // 닫힌패 + 화료패
   let gapFractionSum = (nClosed - 1) * TILE_GAP + WIN_GAP
   for (const m of hand.openMelds) {
+    const isShoumin = m.tiles.length === 4 && m.open && m.added
+    const rowTiles = isShoumin ? 3 : m.tiles.length // 가깡: 3장 + 스택1(폭 0)
     const rotated = m.open && m.rotatedIndex != null ? 1 : 0
-    const upright = m.tiles.length - rotated
+    const upright = rowTiles - rotated
     slotWidthSum += upright + rotated * (4 / 3)
-    gapFractionSum += MELD_GAP + (m.tiles.length - 1) * MELD_INNER
+    gapFractionSum += MELD_GAP + (rowTiles - 1) * MELD_INNER
   }
   const denom = slotWidthSum + gapFractionSum
 
@@ -83,21 +85,44 @@ export default function HandDisplay({ hand }: { hand: Hand }) {
         <span className="flex items-end" style={{ marginLeft: `calc(var(--u) * ${WIN_GAP})` }}>
           <Tile index={hand.winningTile} fluid highlight />
         </span>
-        {/* 후로 그룹들 */}
-        {hand.openMelds.map((m, mi) => (
-          <div
-            key={`m${mi}`}
-            className="flex items-end"
-            style={{
-              marginLeft: `calc(var(--u) * ${MELD_GAP})`,
-              gap: `calc(var(--u) * ${MELD_INNER})`,
-            }}
-          >
-            {m.tiles.map((t, ti) => (
-              <Tile key={ti} index={t} fluid rotated={m.open && ti === m.rotatedIndex} />
-            ))}
-          </div>
-        ))}
+        {/* 후로/깡 그룹들 */}
+        {hand.openMelds.map((m, mi) => {
+          const isKan = m.tiles.length === 4
+          const isAnkan = isKan && !m.open
+          const isShoumin = isKan && m.open && m.added
+          const baseTiles = isShoumin ? m.tiles.slice(0, 3) : m.tiles // 가깡: 3장만 한 줄
+          return (
+            <div
+              key={`m${mi}`}
+              className="flex items-end"
+              style={{
+                marginLeft: `calc(var(--u) * ${MELD_GAP})`,
+                gap: `calc(var(--u) * ${MELD_INNER})`,
+              }}
+            >
+              {baseTiles.map((t, ti) => {
+                // 가깡: 꺾인 패 위에 added(4번째) 타일 스택(세로 컬럼)
+                if (isShoumin && ti === m.rotatedIndex) {
+                  return (
+                    <span key={ti} className="flex flex-col" style={{ width: 'calc(var(--u) * 4 / 3)' }}>
+                      <Tile index={m.tiles[3]} fluid rotated />
+                      <Tile index={t} fluid rotated />
+                    </span>
+                  )
+                }
+                return (
+                  <Tile
+                    key={ti}
+                    index={t}
+                    fluid
+                    back={isAnkan && (ti === 0 || ti === 3)}
+                    rotated={!isAnkan && ti === m.rotatedIndex}
+                  />
+                )
+              })}
+            </div>
+          )
+        })}
       </div>
 
       <p className="text-xs text-ivory/40">
