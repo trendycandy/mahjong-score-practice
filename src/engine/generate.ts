@@ -151,9 +151,9 @@ export function generateQuestion(allowNoYaku = true): Generated {
     // 도라 표시패 1개 (깡 미구현 → 추가 표시패 없음)
     const doraIndicators: number[] = [ri(N_TILES)]
 
-    // 리치: 멘젠일 때만, 60%. 리치 시 30% 일발.
+    // 리치: 멘젠일 때만, 60%. 리치 시 12% 일발.
     const riichi = isMenzen && Math.random() < 0.6
-    const ippatsu = riichi && Math.random() < 0.3
+    const ippatsu = riichi && Math.random() < 0.12
     // 뒷도라 표시패: 리치일 때만 1개
     const uraIndicators: number[] = riichi ? [ri(N_TILES)] : []
 
