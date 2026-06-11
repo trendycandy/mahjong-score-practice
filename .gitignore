@@ -4,3 +4,6 @@ dist
 .DS_Store
 tsconfig.tsbuildinfo
 .vite
+
+# 스펙·플랜은 로컬 작업용 — 레포에 올리지 않음
+docs/superpowers/

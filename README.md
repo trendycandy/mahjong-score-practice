@@ -7,23 +7,6 @@
 - 역 명칭: 나무위키 표기 기준
 - 패 이미지: [FluffyStuff/riichi-mahjong-tiles](https://github.com/FluffyStuff/riichi-mahjong-tiles) (CC0 / 퍼블릭 도메인). `public/tiles/`의 `Front.svg`(본체) 위에 각 패 face SVG를 겹쳐 렌더링.
 
-## 개발
-
-```bash
-npm install
-npm run dev      # 로컬 개발 서버 (http://localhost:5173)
-npm run build    # 프로덕션 빌드 → dist/
-npm run preview  # 빌드 결과 미리보기
-```
-
-## 배포 (GitHub Pages)
-
-1. 이 폴더를 GitHub 레포지토리로 push (브랜치: `main`)
-2. 레포 **Settings → Pages → Build and deployment → Source** 를 **GitHub Actions** 로 설정
-3. push 시 `.github/workflows/deploy.yml` 가 자동 빌드·배포
-   - 공개 주소: `https://<사용자명>.github.io/<레포명>/`
-   - `base` 경로는 레포명으로 워크플로에서 자동 주입됨
-
 ## 구조
 
 ```
@@ -48,7 +31,7 @@ public/tiles/       FluffyStuff 타일 SVG (CC0)
 - 타일 인덱스: 만 `0~8`, 통 `9~17`, 삭 `18~26`, 동남서북 `27~30`, 백발중 `31~33`
 - **쯔모**: `closed` 에 화료패를 마지막에 둔 14장, `ronTile = undefined`
 - **론**: `closed` = 13장, 화료패는 `ronTile` 인자로 별도 전달
-- `dora` 옵션에는 **도라 표시패**를 넣으면 엔진이 실제 도라 자동 계산
+- `dora` 옵션은 **표시패가 아니라 실제 도라패**를 받는다(엔진이 표시패→도라 변환을 안 함). 어댑터가 `doraIndicators.map(doraFromIndicator)`로 변환해 전달
 - 리치/일발은 options가 아닌 **positional 인자**로 전달해야 적용됨
 - `isAgari` 는 "형태 완성"이며, 역 없음 판정은 `ten === 0` (어댑터의 `canWin`)
 
