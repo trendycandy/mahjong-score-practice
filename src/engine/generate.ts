@@ -10,6 +10,18 @@ function pick<T>(arr: T[]): T {
   return arr[ri(arr.length)]
 }
 
+// 출제 빈도 (튜닝 가능)
+const CHIITOI = 0.03   // 치또이츠 핸드 확률
+const KAN_HAND = 0.07  // 깡 핸드 확률(표준형 한정)
+const KAN2 = 0.1       // 깡 핸드 중 2깡
+const KAN3 = 0.001     // 깡 핸드 중 3깡
+
+function rollKanCount(): number {
+  if (Math.random() >= KAN_HAND) return 0
+  const r = Math.random()
+  return r < KAN3 ? 3 : r < KAN2 ? 2 : 1
+}
+
 // 타일 풀: 각 타일 최대 4장. 사용 시 차감.
 class Pool {
   count = new Array<number>(N_TILES).fill(4)
@@ -52,6 +64,16 @@ function tryMakeTriplet(pool: Pool): number[] | null {
   return [t, t, t]
 }
 
+// 깡(칸) 후보: 같은 타일 4개
+function tryMakeKan(pool: Pool): number[] | null {
+  const cands: number[] = []
+  for (let i = 0; i < N_TILES; i++) if (pool.avail(i) >= 4) cands.push(i)
+  if (cands.length === 0) return null
+  const t = pick(cands)
+  pool.take(t, 4)
+  return [t, t, t, t]
+}
+
 function makeMeld(pool: Pool, preferSeq: boolean): number[] | null {
   const order = preferSeq ? [tryMakeSequence, tryMakeTriplet] : [tryMakeTriplet, tryMakeSequence]
   for (const fn of order) {
@@ -70,27 +92,74 @@ function makePair(pool: Pool): number[] | null {
   return [t, t]
 }
 
+interface RawMeld {
+  tiles: number[]
+  isKan: boolean
+}
 interface RawHand {
-  melds: number[][]   // 4 멘쯔
-  pair: number[]      // 머리
-  openCount: number
+  melds: RawMeld[]   // 4 멘쯔 (깡은 4장)
+  pair: number[]     // 머리
+  openCount: number  // 비깡 멘쯔 중 후로(치/퐁) 수
 }
 
-// 구조적으로 유효한 4멘쯔+머리를 생성 (재시도 포함)
+// 구조적으로 유효한 4멘쯔(+깡)+머리를 생성 (재시도 포함)
 function buildRawHand(): RawHand | null {
   const pool = new Pool()
-  const melds: number[][] = []
-  // 후로 개수: 0(60%) 1(25%) 2(15%)
-  const r = Math.random()
-  const openCount = r < 0.6 ? 0 : r < 0.85 ? 1 : 2
+  const nKans = rollKanCount()
+  const melds: RawMeld[] = []
   for (let i = 0; i < 4; i++) {
-    const m = makeMeld(pool, Math.random() < 0.6)
-    if (!m) return null
-    melds.push(m)
+    if (i < nKans) {
+      const k = tryMakeKan(pool)
+      if (!k) return null
+      melds.push({ tiles: k, isKan: true })
+    } else {
+      const m = makeMeld(pool, Math.random() < 0.6)
+      if (!m) return null
+      melds.push({ tiles: m, isKan: false })
+    }
   }
   const pair = makePair(pool)
   if (!pair) return null
+  // 비깡 멘쯔 중 후로 수: 0(60%) 1(25%) 2(15%), 가용 슬롯으로 캡
+  const normalCount = 4 - nKans
+  const r = Math.random()
+  let openCount = r < 0.6 ? 0 : r < 0.85 ? 1 : 2
+  if (openCount > normalCount) openCount = normalCount
   return { melds, pair, openCount }
+}
+
+// 상황(풍패·리치·일발·도라) 생성. 깡 수만큼 도라 표시패 추가.
+function rollSituation(isMenzen: boolean, nKans: number) {
+  const bakaze = Math.random() < 0.7 ? 27 : 28
+  const jikaze = pick([27, 28, 29, 30])
+  const riichi = isMenzen && Math.random() < 0.6
+  const ippatsu = riichi && Math.random() < 0.12
+  const k = 1 + nKans // 도라 표시패 수 = 1 + 깡수
+  const doraIndicators = Array.from({ length: k }, () => ri(N_TILES))
+  const uraIndicators = riichi ? Array.from({ length: k }, () => ri(N_TILES)) : []
+  return { bakaze, jikaze, riichi, ippatsu, doraIndicators, uraIndicators }
+}
+
+// 치또이츠(칠대자): 서로 다른 7쌍. 멘젠 전용.
+function buildChiitoitsu(): { closed: number[]; winningTile: number; isTsumo: boolean } | null {
+  const used = new Set<number>()
+  const idxs: number[] = []
+  let guard = 0
+  while (idxs.length < 7 && guard++ < 200) {
+    const t = ri(N_TILES)
+    if (!used.has(t)) {
+      used.add(t)
+      idxs.push(t)
+    }
+  }
+  if (idxs.length < 7) return null
+  const all = idxs.flatMap((t) => [t, t]) // 14장
+  const winningTile = pick(idxs)
+  const isTsumo = Math.random() < 0.5
+  const rest = [...all]
+  rest.splice(rest.indexOf(winningTile), 1) // 13장 (화료패 1장 빠진 단기형)
+  const closed = isTsumo ? [...rest, winningTile] : rest
+  return { closed, winningTile, isTsumo }
 }
 
 export interface Generated {
@@ -100,33 +169,63 @@ export interface Generated {
 
 // 한 문제 생성. allowNoYaku=true 면 '역 없음(화료 불가)' 문제도 채택.
 export function generateQuestion(allowNoYaku = true): Generated {
-  for (let attempt = 0; attempt < 200; attempt++) {
+  for (let attempt = 0; attempt < 300; attempt++) {
+    // ── 치또이츠 경로 (표준형과 배타) ──
+    if (Math.random() < CHIITOI) {
+      const base = buildChiitoitsu()
+      if (!base) continue
+      const s = rollSituation(true, 0)
+      const hand: Hand = {
+        closed: base.closed,
+        openMelds: [],
+        winningTile: base.winningTile,
+        isTsumo: base.isTsumo,
+        bakaze: s.bakaze,
+        jikaze: s.jikaze,
+        doraIndicators: s.doraIndicators,
+        uraIndicators: s.uraIndicators,
+        riichi: s.riichi,
+        ippatsu: s.ippatsu,
+        isMenzen: true,
+      }
+      const scored = scoreHand(hand)
+      // 엔진이 치또이츠로 채점할 때만 채택(량페코면 재시도 → 중첩 회피)
+      if (scored.canWin && scored.yaku.chiitoitsu) return { hand, scored }
+      continue
+    }
+
+    // ── 표준형(+깡) 경로 ──
     const raw = buildRawHand()
     if (!raw) continue
 
-    // 멘쯔 중 일부를 후로로. 슌쯔는 치(open), 커쯔는 퐁(open).
-    // 화료패는 "닫힌" 멘쯔 또는 머리에서 골라야 자연스러움.
-    const meldIdx = [0, 1, 2, 3]
-    // 섞기
-    for (let i = meldIdx.length - 1; i > 0; i--) {
+    // 후로 대상은 "비깡 멘쯔" 중에서만 선정
+    const normalIdx = raw.melds.map((m, i) => ({ m, i })).filter((x) => !x.m.isKan).map((x) => x.i)
+    for (let i = normalIdx.length - 1; i > 0; i--) {
       const j = ri(i + 1)
-      ;[meldIdx[i], meldIdx[j]] = [meldIdx[j], meldIdx[i]]
+      ;[normalIdx[i], normalIdx[j]] = [normalIdx[j], normalIdx[i]]
     }
-    const openMeldIdx = new Set(meldIdx.slice(0, raw.openCount))
+    const openNormal = new Set(normalIdx.slice(0, raw.openCount))
+
     const openMelds: OpenMeld[] = []
     const concealedTiles: number[] = [...raw.pair]
-    raw.melds.forEach((m, i) => {
-      if (openMeldIdx.has(i)) {
-        const isTriplet = m[0] === m[1] // 퐁(커쯔) 여부
-        // 치(슌쯔): 맨 왼쪽 패를 꺾음 / 퐁(커쯔): 랜덤 위치
+    raw.melds.forEach((rm, i) => {
+      if (rm.isKan) {
+        const kt = ri(3) // 0=안깡 1=대명깡 2=가깡
+        if (kt === 0) openMelds.push({ open: false, tiles: rm.tiles })
+        else if (kt === 1) openMelds.push({ open: true, tiles: rm.tiles, rotatedIndex: ri(4) })
+        else openMelds.push({ open: true, tiles: rm.tiles, rotatedIndex: ri(3), added: true })
+      } else if (openNormal.has(i)) {
+        const isTriplet = rm.tiles[0] === rm.tiles[1] // 퐁(커쯔) 여부
         const rotatedIndex = isTriplet ? ri(3) : 0
-        openMelds.push({ open: true, tiles: m, rotatedIndex })
+        openMelds.push({ open: true, tiles: rm.tiles, rotatedIndex })
       } else {
-        concealedTiles.push(...m)
+        concealedTiles.push(...rm.tiles)
       }
     })
 
-    const isMenzen = raw.openCount === 0
+    // 멘젠 = 열린 멘쯔(open:true) 없음 → 안깡만 있으면 멘젠 유지
+    const isMenzen = openMelds.every((m) => !m.open)
+    const nKans = raw.melds.filter((m) => m.isKan).length
 
     // 화료패: 닫힌 타일 중 하나
     const winningTile = pick(concealedTiles)
@@ -144,30 +243,18 @@ export function generateQuestion(allowNoYaku = true): Generated {
       closed = rest
     }
 
-    // 풍패
-    const bakaze = Math.random() < 0.7 ? 27 : 28 // 동/남장
-    const jikaze = pick([27, 28, 29, 30])
-
-    // 도라 표시패 1개 (깡 미구현 → 추가 표시패 없음)
-    const doraIndicators: number[] = [ri(N_TILES)]
-
-    // 리치: 멘젠일 때만, 60%. 리치 시 12% 일발.
-    const riichi = isMenzen && Math.random() < 0.6
-    const ippatsu = riichi && Math.random() < 0.12
-    // 뒷도라 표시패: 리치일 때만 1개
-    const uraIndicators: number[] = riichi ? [ri(N_TILES)] : []
-
+    const s = rollSituation(isMenzen, nKans)
     const hand: Hand = {
       closed,
       openMelds,
       winningTile,
       isTsumo,
-      bakaze,
-      jikaze,
-      doraIndicators,
-      uraIndicators,
-      riichi,
-      ippatsu,
+      bakaze: s.bakaze,
+      jikaze: s.jikaze,
+      doraIndicators: s.doraIndicators,
+      uraIndicators: s.uraIndicators,
+      riichi: s.riichi,
+      ippatsu: s.ippatsu,
       isMenzen,
     }
 
