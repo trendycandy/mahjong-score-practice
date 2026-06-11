@@ -3,6 +3,7 @@ import { tileFaceFile } from '../engine/tiles'
 // public/tiles 의 SVG 경로 (GitHub Pages base 경로 자동 반영)
 const TILE_DIR = `${import.meta.env.BASE_URL}tiles/`
 const FRONT = `${TILE_DIR}Front.svg`
+const BACK = `${TILE_DIR}Back.svg`
 
 // 타일 본체 비율 3:4 (원본 300x400)
 const DIM = {
@@ -18,6 +19,7 @@ export default function Tile({
   dim = false,
   rotated = false,
   fluid = false,
+  back = false,
 }: {
   index: number
   size?: 'sm' | 'md'
@@ -26,6 +28,7 @@ export default function Tile({
   dim?: boolean
   rotated?: boolean
   fluid?: boolean
+  back?: boolean
 }) {
   const face = `${TILE_DIR}${tileFaceFile(index)}.svg`
 
@@ -47,6 +50,14 @@ export default function Tile({
   )
 
   if (fluid) {
+    if (back) {
+      // 안깡 바깥 패: 노란 뒷면(Back.svg)
+      return (
+        <span className="block aspect-[3/4]" style={{ width: 'var(--u)' }}>
+          <img src={BACK} alt="" className="h-full w-full rounded-[5px] shadow-sm" draggable={false} />
+        </span>
+      )
+    }
     // 폭은 부모 행이 주입한 --u 기준. 똑바른 패: 폭 u, 높이 aspect-[3/4].
     if (!rotated) {
       return (
