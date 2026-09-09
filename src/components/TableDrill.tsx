@@ -4,6 +4,7 @@ import type { Answer, Cell, CellFilter, Explanation, Seat, TableGrade, TableInpu
 import {
   FU_LIST,
   STAGES,
+  STAGE_GROUPS,
   cellKey,
   cellLabel,
   cellsFor,
@@ -74,6 +75,8 @@ export default function TableDrill({
 }) {
   const isExam = variant === 'exam'
   const initial = isExam ? EXAM_STAGE : STAGES[0]
+  // 연습은 바둑판(단계 선택)에서 시작, 실전은 바로 문제
+  const [view, setView] = useState<'pick' | 'drill'>(isExam ? 'drill' : 'pick')
   const [stageId, setStageId] = useState<string | null>(initial.id)
   const [filter, setFilter] = useState<CellFilter>(initial.filter)
   const [showHint, setShowHint] = useState(false)
@@ -97,6 +100,7 @@ export default function TableDrill({
     setStageId(id)
     setFilter(s.filter)
     nextFrom(s.filter, cell)
+    setView('drill')
   }
 
   const updateFilter = (patch: Partial<CellFilter>) => {
@@ -122,29 +126,64 @@ export default function TableDrill({
   const promptKey = cell ? (inputFields(cell).length === 2 ? 'ko' : inputFields(cell)[0]) : 'total'
   const hintTips = cell && showHint ? explain(cell, computeAnswer(cell)).tips : []
 
+  // ── 연습: 단계 선택 바둑판 ──
+  if (view === 'pick') {
+    return (
+      <div className="flex flex-1 flex-col gap-4">
+        <div className="flex items-center justify-between text-xs text-ivory/50">
+          <span className="font-medium text-ivory/80">단계를 고르세요</span>
+          <button onClick={onBack} className="underline decoration-ivory/30 hover:text-ivory/80">
+            모드 바꾸기
+          </button>
+        </div>
+        {STAGE_GROUPS.map((g) => (
+          <div key={g}>
+            <div className="mb-1.5 text-xs font-medium text-ivory/60">{g}</div>
+            <div className="grid grid-cols-2 gap-2 landscape:grid-cols-3">
+              {STAGES.filter((s) => s.group === g).map((s) => {
+                const n = cellsFor(s.filter).length
+                const on = s.id === stageId
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => applyStage(s.id)}
+                    className={`rounded-lg border p-2.5 text-left transition active:scale-[.98] ${
+                      on ? 'border-jade bg-jade/15' : 'border-ivory/15 bg-felt/40 hover:border-ivory/40'
+                    }`}
+                  >
+                    <div className={`text-sm font-bold ${on ? 'text-jade' : 'text-ivory'}`}>{s.title}</div>
+                    <div className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-ivory/50">
+                      {s.hint} · {n}칸
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-1 flex-col gap-4">
-      {/* 단계 칩 (가로 스크롤) — 연습 모드만 */}
-      {!isExam && (
-        <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
-          {STAGES.map((s, i) => (
-            <Chip key={s.id} on={s.id === stageId} onClick={() => applyStage(s.id)} tone="stage">
-              {i + 1}. {s.title}
-            </Chip>
-          ))}
-        </div>
-      )}
-
-      {/* 단계 소개 + 모드 바꾸기 */}
+      {/* 단계 소개 + 단계/모드 바꾸기 */}
       <div className="flex items-start justify-between gap-2 text-xs text-ivory/50">
         <div>
           <span className="font-medium text-ivory/80">{isExam ? '실전' : stage ? stage.title : '자유 선택'}</span>
           {isExam ? <span> · 전체 무작위 · 힌트 없음</span> : stage && <span> · {stage.hint}</span>}
           <span> · {cells.length}칸</span>
         </div>
-        <button onClick={onBack} className="shrink-0 underline decoration-ivory/30 hover:text-ivory/80">
-          모드 바꾸기
-        </button>
+        <div className="flex shrink-0 gap-2">
+          {!isExam && (
+            <button onClick={() => setView('pick')} className="underline decoration-ivory/30 hover:text-ivory/80">
+              단계 바꾸기
+            </button>
+          )}
+          <button onClick={onBack} className="underline decoration-ivory/30 hover:text-ivory/80">
+            모드 바꾸기
+          </button>
+        </div>
       </div>
 
       {/* 범위 조정 — 연습 모드에서 항상 표시 */}

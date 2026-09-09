@@ -1,5 +1,5 @@
 // 점수표 연습용 순수 모듈 (UI·riichi-ts 비의존).
-// 기준: public/score.png — 표준 공식, 절삭만관 없음(30부 4판 7700/11600, 60부 3판 7700/11600).
+// 기준: public/score.png — 표준 공식, 절상만관 없음(30부 4판 7700/11600, 60부 3판 7700/11600).
 
 export type Seat = 'ko' | 'oya'          // 자 / 친
 export type WinType = 'ron' | 'tsumo'
@@ -126,6 +126,7 @@ export interface CellFilter {
 
 export interface Stage {
   id: string
+  group: string         // 바둑판 화면의 묶음 제목 ('자 론' · '자 쯔모' · '친 론' · '친 쯔모' · '기타')
   title: string
   hint: string          // 단계 소개 한 줄(문제 카드 위)
   filter: CellFilter
@@ -133,21 +134,44 @@ export interface Stage {
 
 const F = (seats: Seat[], wins: WinType[], fus: number[], limits = false): CellFilter => ({ seats, wins, fus, limits })
 
-export const STAGES: Stage[] = [
-  { id: 'ko-ron-30', title: '자 론 30부', hint: '기준이 되는 열. 1000·2000·3900(장쿠)·7700(치치이)', filter: F(['ko'], ['ron'], [30]) },
-  { id: 'ko-ron-50', title: '자 론 50부', hint: '올림 없이 2배씩. 1600·3200·6400', filter: F(['ko'], ['ron'], [50]) },
-  { id: 'ko-ron-25', title: '자 론 25부', hint: '치또이 전용. 한 판 내려 50부로 = 50부 열 그대로', filter: F(['ko'], ['ron'], [25]) },
-  { id: 'ko-ron-40', title: '자 론 40부', hint: '30부와 50부 사이. 1300·2600·5200', filter: F(['ko'], ['ron'], [40]) },
-  { id: 'ko-ron-derived', title: '자 론 60/80/100부', hint: '한 판 올려 30/40/50부로 계산', filter: F(['ko'], ['ron'], [60, 80, 100]) },
-  { id: 'ko-ron-rest', title: '자 론 70/90/110부', hint: '유도 규칙 없음 — 그대로 외우기', filter: F(['ko'], ['ron'], [70, 90, 110]) },
-  { id: 'ko-tsumo-30', title: '자 쯔모 30부', hint: '친 몫 = 한 판 낮춘 론, 자 몫 = 두 판 낮춘 론', filter: F(['ko'], ['tsumo'], [30]) },
-  { id: 'ko-tsumo-core', title: '자 쯔모 20/25/40/50부', hint: '20부는 한 판 내려 40부로', filter: F(['ko'], ['tsumo'], [20, 25, 40, 50]) },
-  { id: 'ko-tsumo-rest', title: '자 쯔모 60~110부', hint: '60/80/100부는 한 판 올려 30/40/50부로', filter: F(['ko'], ['tsumo'], [60, 70, 80, 90, 100, 110]) },
-  { id: 'oya-ron', title: '친 론', hint: '자 론의 1.5배. 자 30부 2·3·4판 = 친 40부 1·2·3판', filter: F(['oya'], ['ron'], FU_LIST) },
-  { id: 'oya-tsumo', title: '친 쯔모', hint: '자 쯔모 때 친이 내는 몫을 3명 전원에게', filter: F(['oya'], ['tsumo'], FU_LIST) },
-  { id: 'limits', title: '만관 이상', hint: '만관 8000/12000 · 하네만 · 배만 · 삼배만 · 역만', filter: F(['ko', 'oya'], ['ron', 'tsumo'], [], true) },
-  { id: 'all', title: '전체 무작위', hint: '점수표 전 칸', filter: F(['ko', 'oya'], ['ron', 'tsumo'], FU_LIST, true) },
+// 부수 계열: 자/친 × 론/쯔모 공통. 20부는 쯔모 전용이라 론 계열에는 없음.
+interface FuFamily {
+  key: string
+  fus: number[]
+  label: string
+  hint: (seat: Seat, win: WinType) => string
+}
+const FAMILIES: FuFamily[] = [
+  { key: '30', fus: [30], label: '30부', hint: (s, w) => (s === 'ko' && w === 'ron' ? '기준이 되는 열. 1000·2000·3900(장쿠)·7700(치치이)' : w === 'tsumo' && s === 'ko' ? '친 몫 = 한 판 낮춘 론, 자 몫 = 두 판 낮춘 론' : s === 'oya' && w === 'ron' ? '자 론의 1.5배. 1500·2900·5800·11600' : '자 쯔모 때 친이 내는 몫을 3명 전원에게. 500·1000·2000·3900 ALL') },
+  { key: '50', fus: [50], label: '50부', hint: () => '올림 없이 2배씩' },
+  { key: '25', fus: [25], label: '25부', hint: () => '치또이 전용. 한 판 내려 50부로 = 50부 열 그대로' },
+  { key: '40', fus: [40], label: '40부', hint: () => '30부와 50부 사이' },
+  { key: '20', fus: [20], label: '20부', hint: () => '핑후 쯔모 전용. 한 판 내려 40부로' },
+  { key: 'derived', fus: [60, 80, 100], label: '60/80/100부', hint: () => '한 판 올려 30/40/50부로 계산' },
+  { key: 'rest', fus: [70, 90, 110], label: '70/90/110부', hint: () => '유도 규칙 없음 — 그대로 외우기' },
 ]
+
+function familyStages(seat: Seat, win: WinType): Stage[] {
+  const group = `${SEAT_KO[seat]} ${WIN_KO[win]}`
+  return FAMILIES.filter((f) => !(f.key === '20' && win === 'ron')).map((f) => ({
+    id: `${seat}-${win}-${f.key}`,
+    group,
+    title: `${group} ${f.label}`,
+    hint: f.hint(seat, win),
+    filter: F([seat], [win], f.fus),
+  }))
+}
+
+export const STAGES: Stage[] = [
+  ...familyStages('ko', 'ron'),
+  ...familyStages('ko', 'tsumo'),
+  ...familyStages('oya', 'ron'),
+  ...familyStages('oya', 'tsumo'),
+  { id: 'limits', group: '기타', title: '만관 이상', hint: '만관 8000/12000 · 하네만 · 배만 · 삼배만 · 역만', filter: F(['ko', 'oya'], ['ron', 'tsumo'], [], true) },
+  { id: 'all', group: '기타', title: '전체 무작위', hint: '점수표 전 칸', filter: F(['ko', 'oya'], ['ron', 'tsumo'], FU_LIST, true) },
+]
+
+export const STAGE_GROUPS: string[] = Array.from(new Set(STAGES.map((s) => s.group)))
 
 export function cellsFor(f: CellFilter): Cell[] {
   return allCells().filter((c) => {
@@ -257,7 +281,7 @@ function fuTips(c: Cell): string[] {
       tips.push(`${fu}부는 유도 규칙이 없어 그대로 외운다.`)
   }
   if ((fu === 30 && han === 4) || (fu === 60 && han === 3)) {
-    tips.push(`만관으로 치는 룰도 있지만 이 표는 ${c.seat === 'oya' ? '11600' : '7700'} (절삭만관 없음).`)
+    tips.push(`만관으로 치는 룰도 있지만 이 표는 ${c.seat === 'oya' ? '11600' : '7700'} (절상만관 없음).`)
   }
   return tips
 }

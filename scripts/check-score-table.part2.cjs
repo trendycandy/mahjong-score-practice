@@ -3,21 +3,34 @@ module.exports = function (T, eq) {
   const cell = (seat, win, han, fu) => ({ seat, win, han, fu, limit: null })
 
   // ── 단계 ──
-  eq(T.STAGES.length, 13, '13 stages')
+  eq(T.STAGES.length, 28, '28 stages')
+  const fam = (seat, win) => ['30', '50', '25', '40', ...(win === 'tsumo' ? ['20'] : []), 'derived', 'rest'].map((k) => `${seat}-${win}-${k}`)
   eq(T.STAGES.map((s) => s.id), [
-    'ko-ron-30', 'ko-ron-50', 'ko-ron-25', 'ko-ron-40', 'ko-ron-derived', 'ko-ron-rest',
-    'ko-tsumo-30', 'ko-tsumo-core', 'ko-tsumo-rest', 'oya-ron', 'oya-tsumo', 'limits', 'all',
+    ...fam('ko', 'ron'), ...fam('ko', 'tsumo'), ...fam('oya', 'ron'), ...fam('oya', 'tsumo'), 'limits', 'all',
   ], 'stage ids')
-  eq(T.cellsFor(T.STAGES[1].filter).map(T.cellKey), ['ko/ron/50/1', 'ko/ron/50/2', 'ko/ron/50/3'], 'stage 50 cells')
-  eq(T.cellsFor(T.STAGES[2].filter).map(T.cellKey), ['ko/ron/25/2', 'ko/ron/25/3', 'ko/ron/25/4'], 'stage 25 cells')
+  eq(T.STAGE_GROUPS, ['자 론', '자 쯔모', '친 론', '친 쯔모', '기타'], 'stage groups')
+  eq(new Set(T.STAGES.map((s) => s.id)).size, 28, 'stage ids unique')
+  const byId = (id) => T.STAGES.find((s) => s.id === id)
+  eq(T.cellsFor(byId('ko-ron-50').filter).map(T.cellKey), ['ko/ron/50/1', 'ko/ron/50/2', 'ko/ron/50/3'], 'stage 50 cells')
+  eq(T.cellsFor(byId('ko-ron-25').filter).map(T.cellKey), ['ko/ron/25/2', 'ko/ron/25/3', 'ko/ron/25/4'], 'stage 25 cells')
+  eq(T.cellsFor(byId('ko-tsumo-50').filter).map(T.cellKey), ['ko/tsumo/50/1', 'ko/tsumo/50/2', 'ko/tsumo/50/3'], 'ko tsumo 50 cells')
+  eq(T.cellsFor(byId('ko-tsumo-20').filter).map(T.cellKey), ['ko/tsumo/20/2', 'ko/tsumo/20/3', 'ko/tsumo/20/4'], 'ko tsumo 20 cells')
+  eq(T.cellsFor(byId('oya-ron-30').filter).map(T.cellKey), ['oya/ron/30/1', 'oya/ron/30/2', 'oya/ron/30/3', 'oya/ron/30/4'], 'oya ron 30 cells')
+  eq(byId('oya-tsumo-rest').title, '친 쯔모 70/90/110부', 'oya tsumo rest title')
+  // 자/친 × 론/쯔모 부수 계열 단계의 합집합 = 해당 seat/win 의 1~4판 전 칸
+  for (const seat of ['ko', 'oya']) for (const win of ['ron', 'tsumo']) {
+    const union = new Set(T.STAGES.filter((s) => s.id.startsWith(`${seat}-${win}-`)).flatMap((s) => T.cellsFor(s.filter).map(T.cellKey)))
+    const expect = T.allCells().filter((c) => !c.limit && c.seat === seat && c.win === win).map(T.cellKey)
+    eq([...union].sort(), expect.sort(), `family stages cover all ${seat}/${win} cells`)
+  }
   for (const s of T.STAGES) {
     const n = T.cellsFor(s.filter).length
     if (n === 0) eq(n, '>0', `stage ${s.id} has cells`)
   }
   eq(T.cellsFor(T.STAGES[0].filter).map(T.cellKey), ['ko/ron/30/1', 'ko/ron/30/2', 'ko/ron/30/3', 'ko/ron/30/4'], 'stage1 cells')
-  eq(T.cellsFor(T.STAGES[11].filter).every((c) => c.limit !== null), true, 'limits stage only limit cells')
-  eq(T.cellsFor(T.STAGES[11].filter).length, 20, 'limits stage 20 cells')
-  eq(T.cellsFor(T.STAGES[12].filter).length, T.allCells().length, 'all stage = every cell')
+  eq(T.cellsFor(byId('limits').filter).every((c) => c.limit !== null), true, 'limits stage only limit cells')
+  eq(T.cellsFor(byId('limits').filter).length, 20, 'limits stage 20 cells')
+  eq(T.cellsFor(byId('all').filter).length, T.allCells().length, 'all stage = every cell')
   eq(T.cellsFor({ seats: ['ko'], wins: ['ron'], fus: [], limits: false }).length, 0, 'empty fus & no limits → 0')
   eq(T.cellsFor({ seats: ['oya'], wins: ['tsumo'], fus: [20], limits: false }).map(T.cellKey), ['oya/tsumo/20/2', 'oya/tsumo/20/3', 'oya/tsumo/20/4'], 'filter oya tsumo 20')
 

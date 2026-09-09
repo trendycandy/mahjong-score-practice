@@ -140,7 +140,7 @@ export default function App() {
       </main>
 
       <footer className="mt-4 text-center text-xs text-ivory/30">
-        {mode === 'home' || mode === 'hand' ? '채점 엔진: riichi-ts' : '기준: 첨부 점수표 (절삭만관 없음)'}
+        {mode === 'home' || mode === 'hand' ? '채점 엔진: riichi-ts' : '기준: 첨부 점수표 (절상만관 없음)'}
       </footer>
 
       {/* 점수표 팝업 */}
