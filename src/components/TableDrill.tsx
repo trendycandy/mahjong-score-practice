@@ -53,8 +53,10 @@ function Chip({
   )
 }
 
-function toggle<T>(arr: T[], v: T): T[] {
-  return arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]
+// 자/친·론/쯔모 토글. 마지막 하나는 끌 수 없음(범위가 비지 않게).
+function toggleKeepOne<T>(arr: T[], v: T): T[] {
+  if (!arr.includes(v)) return [...arr, v]
+  return arr.length > 1 ? arr.filter((x) => x !== v) : arr
 }
 
 export type DrillVariant = 'practice' | 'exam'
@@ -150,24 +152,25 @@ export default function TableDrill({
         <div className="space-y-2 rounded-lg bg-felt/60 p-3 ring-1 ring-ivory/10">
           <div className="flex flex-wrap gap-1.5">
             {(['ko', 'oya'] as Seat[]).map((s) => (
-              <Chip key={s} on={filter.seats.includes(s)} onClick={() => updateFilter({ seats: toggle(filter.seats, s) })}>
+              <Chip key={s} on={filter.seats.includes(s)} onClick={() => updateFilter({ seats: toggleKeepOne(filter.seats, s) })}>
                 {s === 'ko' ? '자' : '친'}
               </Chip>
             ))}
             <span className="w-2" />
             {(['ron', 'tsumo'] as WinType[]).map((w) => (
-              <Chip key={w} on={filter.wins.includes(w)} onClick={() => updateFilter({ wins: toggle(filter.wins, w) })}>
+              <Chip key={w} on={filter.wins.includes(w)} onClick={() => updateFilter({ wins: toggleKeepOne(filter.wins, w) })}>
                 {w === 'ron' ? '론' : '쯔모'}
               </Chip>
             ))}
           </div>
+          {/* 부수는 라디오: 누른 것 하나만 선택(단계 프리셋은 여러 개일 수 있음). 「만관 이상」도 같은 줄의 선택지. */}
           <div className="flex flex-wrap gap-1.5">
             {FU_LIST.map((f) => (
-              <Chip key={f} on={filter.fus.includes(f)} onClick={() => updateFilter({ fus: toggle(filter.fus, f) })}>
+              <Chip key={f} on={filter.fus.includes(f)} onClick={() => updateFilter({ fus: [f], limits: false })}>
                 {f}부
               </Chip>
             ))}
-            <Chip on={filter.limits} onClick={() => updateFilter({ limits: !filter.limits })}>
+            <Chip on={filter.limits} onClick={() => updateFilter({ fus: [], limits: true })}>
               만관 이상
             </Chip>
           </div>
