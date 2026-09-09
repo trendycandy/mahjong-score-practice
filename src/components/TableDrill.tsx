@@ -4,7 +4,6 @@ import type { Answer, Cell, CellFilter, Explanation, Seat, TableGrade, TableInpu
 import {
   FU_LIST,
   STAGES,
-  STAGE_GROUPS,
   cellKey,
   cellLabel,
   cellsFor,
@@ -66,17 +65,15 @@ const EXAM_STAGE = STAGES[STAGES.length - 1] // 전체 무작위
 
 export default function TableDrill({
   variant,
+  initialStageId,
   onResult,
-  onBack,
 }: {
   variant: DrillVariant
+  initialStageId?: string   // 연습: 바둑판(StagePicker)에서 고른 단계. 실전은 무시(전체 무작위).
   onResult: (correct: boolean) => void
-  onBack: () => void
 }) {
   const isExam = variant === 'exam'
-  const initial = isExam ? EXAM_STAGE : STAGES[0]
-  // 연습은 바둑판(단계 선택)에서 시작, 실전은 바로 문제
-  const [view, setView] = useState<'pick' | 'drill'>(isExam ? 'drill' : 'pick')
+  const initial = isExam ? EXAM_STAGE : (STAGES.find((s) => s.id === initialStageId) ?? STAGES[0])
   const [stageId, setStageId] = useState<string | null>(initial.id)
   const [filter, setFilter] = useState<CellFilter>(initial.filter)
   const [showHint, setShowHint] = useState(false)
@@ -93,15 +90,6 @@ export default function TableDrill({
     setResult(null)
     setShowHint(false)
   }, [])
-
-  const applyStage = (id: string) => {
-    const s = STAGES.find((x) => x.id === id)
-    if (!s) return
-    setStageId(id)
-    setFilter(s.filter)
-    nextFrom(s.filter, cell)
-    setView('drill')
-  }
 
   const updateFilter = (patch: Partial<CellFilter>) => {
     const f = { ...filter, ...patch }
@@ -126,64 +114,13 @@ export default function TableDrill({
   const promptKey = cell ? (inputFields(cell).length === 2 ? 'ko' : inputFields(cell)[0]) : 'total'
   const hintTips = cell && showHint ? explain(cell, computeAnswer(cell)).tips : []
 
-  // ── 연습: 단계 선택 바둑판 ──
-  if (view === 'pick') {
-    return (
-      <div className="flex flex-1 flex-col gap-4">
-        <div className="flex items-center justify-between text-xs text-ivory/50">
-          <span className="font-medium text-ivory/80">단계를 고르세요</span>
-          <button onClick={onBack} className="underline decoration-ivory/30 hover:text-ivory/80">
-            모드 바꾸기
-          </button>
-        </div>
-        {STAGE_GROUPS.map((g) => (
-          <div key={g}>
-            <div className="mb-1.5 text-xs font-medium text-ivory/60">{g}</div>
-            <div className="grid grid-cols-2 gap-2 landscape:grid-cols-3">
-              {STAGES.filter((s) => s.group === g).map((s) => {
-                const n = cellsFor(s.filter).length
-                const on = s.id === stageId
-                return (
-                  <button
-                    key={s.id}
-                    onClick={() => applyStage(s.id)}
-                    className={`rounded-lg border p-2.5 text-left transition active:scale-[.98] ${
-                      on ? 'border-jade bg-jade/15' : 'border-ivory/15 bg-felt/40 hover:border-ivory/40'
-                    }`}
-                  >
-                    <div className={`text-sm font-bold ${on ? 'text-jade' : 'text-ivory'}`}>{s.title}</div>
-                    <div className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-ivory/50">
-                      {s.hint} · {n}칸
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
-    )
-  }
-
   return (
     <div className="flex flex-1 flex-col gap-4">
-      {/* 단계 소개 + 단계/모드 바꾸기 */}
-      <div className="flex items-start justify-between gap-2 text-xs text-ivory/50">
-        <div>
-          <span className="font-medium text-ivory/80">{isExam ? '실전' : stage ? stage.title : '자유 선택'}</span>
-          {isExam ? <span> · 전체 무작위 · 힌트 없음</span> : stage && <span> · {stage.hint}</span>}
-          <span> · {cells.length}칸</span>
-        </div>
-        <div className="flex shrink-0 gap-2">
-          {!isExam && (
-            <button onClick={() => setView('pick')} className="underline decoration-ivory/30 hover:text-ivory/80">
-              단계 바꾸기
-            </button>
-          )}
-          <button onClick={onBack} className="underline decoration-ivory/30 hover:text-ivory/80">
-            모드 바꾸기
-          </button>
-        </div>
+      {/* 단계 소개 (층 이동은 헤더의 「이전」「홈」) */}
+      <div className="text-xs text-ivory/50">
+        <span className="font-medium text-ivory/80">{isExam ? '실전' : stage ? stage.title : '자유 선택'}</span>
+        {isExam ? <span> · 전체 무작위 · 힌트 없음</span> : stage && <span> · {stage.hint}</span>}
+        <span> · {cells.length}칸</span>
       </div>
 
       {/* 범위 조정 — 연습 모드에서 항상 표시 */}

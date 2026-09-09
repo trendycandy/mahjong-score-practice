@@ -8,9 +8,18 @@ import AnswerForm from './components/AnswerForm'
 import ResultPanel from './components/ResultPanel'
 import TableDrill from './components/TableDrill'
 import type { DrillVariant } from './components/TableDrill'
+import StagePicker from './components/StagePicker'
+import { STAGES } from './engine/scoreTable'
 
-// home: 진입 선택 화면 / hand: 손패 연습 / table-select: 연습·실전 선택 화면 / practice·exam: 점수표 연습 모드
-type Mode = 'home' | 'hand' | 'table-select' | DrillVariant
+// 층위: home → hand | table-select → (practice: stage-select → practice) | exam
+type Mode = 'home' | 'hand' | 'table-select' | 'stage-select' | DrillVariant
+const PARENT: Record<Exclude<Mode, 'home'>, Mode> = {
+  hand: 'home',
+  'table-select': 'home',
+  'stage-select': 'table-select',
+  practice: 'stage-select',
+  exam: 'table-select',
+}
 interface Stats {
   correct: number
   total: number
@@ -25,6 +34,7 @@ const bump = (p: Stats, ok: boolean): Stats => ({
 
 export default function App() {
   const [mode, setMode] = useState<Mode>('home')
+  const [stageId, setStageId] = useState<string>(STAGES[0].id)
   const [q, setQ] = useState<Generated>(() => generateQuestion(true))
   const [guess, setGuess] = useState<Guess | null>(null)
   const [stats, setStats] = useState<Stats>(ZERO)
@@ -44,7 +54,7 @@ export default function App() {
 
   const scoreTableSrc = `${import.meta.env.BASE_URL}score.png`
   const shown = mode === 'hand' ? stats : mode === 'exam' ? examStats : practiceStats
-  const titleMain = mode === 'home' ? '리치마작' : mode === 'hand' ? '리치마작 점수계산' : '점수표'
+  const titleMain = mode === 'home' ? '리치마작' : mode === 'hand' ? '점수계산' : '점수표'
   const titleTag = mode === 'exam' ? '실전' : '연습'
   const showStats = mode === 'hand' || mode === 'practice' || mode === 'exam'
 
@@ -62,12 +72,21 @@ export default function App() {
             </div>
           )}
           {mode !== 'home' && (
-            <button
-              onClick={() => setMode('home')}
-              className="rounded-md border border-jade/40 px-3 py-1.5 text-sm font-medium text-jade transition hover:border-jade active:scale-95"
-            >
-              홈
-            </button>
+            <>
+              <button
+                onClick={() => setMode(PARENT[mode])}
+                aria-label="이전"
+                className="rounded-md border border-ivory/20 px-2.5 py-1.5 text-sm font-medium text-ivory/80 transition hover:border-jade hover:text-jade active:scale-95"
+              >
+                ‹ 이전
+              </button>
+              <button
+                onClick={() => setMode('home')}
+                className="rounded-md border border-jade/40 px-2.5 py-1.5 text-sm font-medium text-jade transition hover:border-jade active:scale-95"
+              >
+                홈
+              </button>
+            </>
           )}
           <button
             onClick={() => setShowScore(true)}
@@ -115,7 +134,7 @@ export default function App() {
           <section className="flex flex-1 flex-col justify-center gap-3">
             <div className="mb-1 text-center text-sm font-medium text-ivory/70">어떻게 연습할까요?</div>
             <button
-              onClick={() => setMode('practice')}
+              onClick={() => setMode('stage-select')}
               className="rounded-xl border border-jade/40 bg-jade/10 p-4 text-left transition hover:border-jade active:scale-[.99]"
             >
               <div className="text-lg font-bold text-jade">연습</div>
@@ -129,12 +148,20 @@ export default function App() {
               <div className="mt-1 text-xs text-ivory/60">점수표 전 칸 무작위 · 힌트 없음 · 채점 후 해설</div>
             </button>
           </section>
+        ) : mode === 'stage-select' ? (
+          <StagePicker
+            current={stageId}
+            onPick={(id) => {
+              setStageId(id)
+              setMode('practice')
+            }}
+          />
         ) : (
           <TableDrill
-            key={mode}
+            key={`${mode}-${stageId}`}
             variant={mode}
+            initialStageId={stageId}
             onResult={(ok) => (mode === 'practice' ? setPracticeStats : setExamStats)((p) => bump(p, ok))}
-            onBack={() => setMode('table-select')}
           />
         )}
       </main>
