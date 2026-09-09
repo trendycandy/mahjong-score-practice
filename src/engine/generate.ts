@@ -33,6 +33,20 @@ class Pool {
   avail(idx: number): number {
     return this.count[idx]
   }
+  // 남은 장수에 비례해 타일 1장을 무작위로 뽑아 차감 (산에서 뒤집는 것과 동일)
+  draw(): number | null {
+    const total = this.count.reduce((a, b) => a + b, 0)
+    if (total <= 0) return null
+    let r = ri(total)
+    for (let i = 0; i < N_TILES; i++) {
+      r -= this.count[i]
+      if (r < 0) {
+        this.count[i]--
+        return i
+      }
+    }
+    return null
+  }
 }
 
 // 순서패(슌쯔) 후보: 같은 수트 연속 3개 (만/통/삭)
@@ -100,6 +114,7 @@ interface RawHand {
   melds: RawMeld[]   // 4 멘쯔 (깡은 4장)
   pair: number[]     // 머리
   openCount: number  // 비깡 멘쯔 중 후로(치/퐁) 수
+  pool: Pool         // 손패 차감 후 남은 타일 풀 (도라 표시패도 여기서 뽑음)
 }
 
 // 구조적으로 유효한 4멘쯔(+깡)+머리를 생성 (재시도 포함)
@@ -125,23 +140,35 @@ function buildRawHand(): RawHand | null {
   const r = Math.random()
   let openCount = r < 0.6 ? 0 : r < 0.85 ? 1 : 2
   if (openCount > normalCount) openCount = normalCount
-  return { melds, pair, openCount }
+  return { melds, pair, openCount, pool }
 }
 
 // 상황(풍패·리치·일발·도라) 생성. 깡 수만큼 도라 표시패 추가.
-function rollSituation(isMenzen: boolean, nKans: number) {
+// 표시패는 손패를 차감한 풀에서 뽑아 어떤 타일도 손패+표시패 합계 4장을 넘지 않게 한다.
+function rollSituation(isMenzen: boolean, nKans: number, pool: Pool) {
   const bakaze = Math.random() < 0.7 ? 27 : 28
   const jikaze = pick([27, 28, 29, 30])
   const riichi = isMenzen && Math.random() < 0.6
   const ippatsu = riichi && Math.random() < 0.12
   const k = 1 + nKans // 도라 표시패 수 = 1 + 깡수
-  const doraIndicators = Array.from({ length: k }, () => ri(N_TILES))
-  const uraIndicators = riichi ? Array.from({ length: k }, () => ri(N_TILES)) : []
+  const drawN = (n: number) => {
+    const out: number[] = []
+    for (let i = 0; i < n; i++) {
+      const t = pool.draw()
+      if (t === null) return null
+      out.push(t)
+    }
+    return out
+  }
+  const doraIndicators = drawN(k)
+  const uraIndicators = riichi ? drawN(k) : []
+  if (!doraIndicators || !uraIndicators) return null
   return { bakaze, jikaze, riichi, ippatsu, doraIndicators, uraIndicators }
 }
 
 // 치또이츠(칠대자): 서로 다른 7쌍. 멘젠 전용.
-function buildChiitoitsu(): { closed: number[]; winningTile: number; isTsumo: boolean } | null {
+function buildChiitoitsu(): { closed: number[]; winningTile: number; isTsumo: boolean; pool: Pool } | null {
+  const pool = new Pool()
   const used = new Set<number>()
   const idxs: number[] = []
   let guard = 0
@@ -150,6 +177,7 @@ function buildChiitoitsu(): { closed: number[]; winningTile: number; isTsumo: bo
     if (!used.has(t)) {
       used.add(t)
       idxs.push(t)
+      pool.take(t, 2)
     }
   }
   if (idxs.length < 7) return null
@@ -159,7 +187,7 @@ function buildChiitoitsu(): { closed: number[]; winningTile: number; isTsumo: bo
   const rest = [...all]
   rest.splice(rest.indexOf(winningTile), 1) // 13장 (화료패 1장 빠진 단기형)
   const closed = isTsumo ? [...rest, winningTile] : rest
-  return { closed, winningTile, isTsumo }
+  return { closed, winningTile, isTsumo, pool }
 }
 
 export interface Generated {
@@ -176,7 +204,8 @@ export function generateQuestion(allowNoYaku = true): Generated {
     if (wantChiitoi) {
       const base = buildChiitoitsu()
       if (!base) continue
-      const s = rollSituation(true, 0)
+      const s = rollSituation(true, 0, base.pool)
+      if (!s) continue
       const hand: Hand = {
         closed: base.closed,
         openMelds: [],
@@ -245,7 +274,8 @@ export function generateQuestion(allowNoYaku = true): Generated {
       closed = rest
     }
 
-    const s = rollSituation(isMenzen, nKans)
+    const s = rollSituation(isMenzen, nKans, raw.pool)
+    if (!s) continue
     const hand: Hand = {
       closed,
       openMelds,
