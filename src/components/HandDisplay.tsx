@@ -64,10 +64,10 @@ export default function HandDisplay({ hand }: { hand: Hand }) {
             {hand.doraIndicators.map((d, i) => (
               <Tile key={`d${i}`} index={d} fluid />
             ))}
-            {hand.riichi &&
-              hand.uraIndicators.map((d, i) => (
-                <Tile key={`u${i}`} index={d} fluid ura />
-              ))}
+            {/* 뒷도라 자리: 리치면 공개(파란 테두리), 아니면 뒤집힌 뒷면 패 */}
+            {hand.riichi
+              ? hand.uraIndicators.map((d, i) => <Tile key={`u${i}`} index={d} fluid ura />)
+              : hand.doraIndicators.map((_, i) => <Tile key={`b${i}`} index={0} fluid back />)}
           </div>
         </div>
         {hand.riichi && <RiichiStick />}
@@ -127,7 +127,7 @@ export default function HandDisplay({ hand }: { hand: Hand }) {
 
       <p className="text-xs text-ivory/40">
         붉은 테두리 = 화료패 ({hand.isTsumo ? '쯔모' : '론'}) · 꺾인 패 = 후로
-        {hand.riichi && hand.uraIndicators.length > 0 && ' · 파란 테두리 = 뒷도라'}
+        {hand.riichi && hand.uraIndicators.length > 0 ? ' · 파란 테두리 = 뒷도라' : ' · 뒷면 = 뒷도라(리치 시 공개)'}
       </p>
     </div>
   )
