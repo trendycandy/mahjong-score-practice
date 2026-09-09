@@ -3,19 +3,21 @@ module.exports = function (T, eq) {
   const cell = (seat, win, han, fu) => ({ seat, win, han, fu, limit: null })
 
   // ── 단계 ──
-  eq(T.STAGES.length, 12, '12 stages')
+  eq(T.STAGES.length, 13, '13 stages')
   eq(T.STAGES.map((s) => s.id), [
-    'ko-ron-30', 'ko-ron-25-50', 'ko-ron-40', 'ko-ron-derived', 'ko-ron-rest',
+    'ko-ron-30', 'ko-ron-50', 'ko-ron-25', 'ko-ron-40', 'ko-ron-derived', 'ko-ron-rest',
     'ko-tsumo-30', 'ko-tsumo-core', 'ko-tsumo-rest', 'oya-ron', 'oya-tsumo', 'limits', 'all',
   ], 'stage ids')
+  eq(T.cellsFor(T.STAGES[1].filter).map(T.cellKey), ['ko/ron/50/1', 'ko/ron/50/2', 'ko/ron/50/3'], 'stage 50 cells')
+  eq(T.cellsFor(T.STAGES[2].filter).map(T.cellKey), ['ko/ron/25/2', 'ko/ron/25/3', 'ko/ron/25/4'], 'stage 25 cells')
   for (const s of T.STAGES) {
     const n = T.cellsFor(s.filter).length
     if (n === 0) eq(n, '>0', `stage ${s.id} has cells`)
   }
   eq(T.cellsFor(T.STAGES[0].filter).map(T.cellKey), ['ko/ron/30/1', 'ko/ron/30/2', 'ko/ron/30/3', 'ko/ron/30/4'], 'stage1 cells')
-  eq(T.cellsFor(T.STAGES[10].filter).every((c) => c.limit !== null), true, 'limits stage only limit cells')
-  eq(T.cellsFor(T.STAGES[10].filter).length, 20, 'limits stage 20 cells')
-  eq(T.cellsFor(T.STAGES[11].filter).length, T.allCells().length, 'all stage = every cell')
+  eq(T.cellsFor(T.STAGES[11].filter).every((c) => c.limit !== null), true, 'limits stage only limit cells')
+  eq(T.cellsFor(T.STAGES[11].filter).length, 20, 'limits stage 20 cells')
+  eq(T.cellsFor(T.STAGES[12].filter).length, T.allCells().length, 'all stage = every cell')
   eq(T.cellsFor({ seats: ['ko'], wins: ['ron'], fus: [], limits: false }).length, 0, 'empty fus & no limits → 0')
   eq(T.cellsFor({ seats: ['oya'], wins: ['tsumo'], fus: [20], limits: false }).map(T.cellKey), ['oya/tsumo/20/2', 'oya/tsumo/20/3', 'oya/tsumo/20/4'], 'filter oya tsumo 20')
 

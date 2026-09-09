@@ -135,7 +135,8 @@ const F = (seats: Seat[], wins: WinType[], fus: number[], limits = false): CellF
 
 export const STAGES: Stage[] = [
   { id: 'ko-ron-30', title: '자 론 30부', hint: '기준이 되는 열. 1000·2000·3900(장쿠)·7700(치치이)', filter: F(['ko'], ['ron'], [30]) },
-  { id: 'ko-ron-25-50', title: '자 론 25/50부', hint: '25부 = 50부에서 한 판 내림. 1600·3200·6400', filter: F(['ko'], ['ron'], [25, 50]) },
+  { id: 'ko-ron-50', title: '자 론 50부', hint: '올림 없이 2배씩. 1600·3200·6400', filter: F(['ko'], ['ron'], [50]) },
+  { id: 'ko-ron-25', title: '자 론 25부', hint: '치또이 전용. 한 판 내려 50부로 = 50부 열 그대로', filter: F(['ko'], ['ron'], [25]) },
   { id: 'ko-ron-40', title: '자 론 40부', hint: '30부와 50부 사이. 1300·2600·5200', filter: F(['ko'], ['ron'], [40]) },
   { id: 'ko-ron-derived', title: '자 론 60/80/100부', hint: '한 판 올려 30/40/50부로 계산', filter: F(['ko'], ['ron'], [60, 80, 100]) },
   { id: 'ko-ron-rest', title: '자 론 70/90/110부', hint: '유도 규칙 없음 — 그대로 외우기', filter: F(['ko'], ['ron'], [70, 90, 110]) },
