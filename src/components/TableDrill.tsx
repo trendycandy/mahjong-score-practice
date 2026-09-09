@@ -1,7 +1,20 @@
 import { useCallback, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { Answer, Cell, CellFilter, Explanation, TableGrade, TableInput } from '../engine/scoreTable'
-import { STAGES, cellKey, cellLabel, cellsFor, computeAnswer, explain, gradeAnswer, inputFields, pickCell } from '../engine/scoreTable'
+import type { Answer, Cell, CellFilter, Explanation, Limit, TableGrade, TableInput } from '../engine/scoreTable'
+import {
+  LIMITS,
+  LIMIT_KO,
+  STAGES,
+  cellKey,
+  cellLabel,
+  cellsFor,
+  computeAnswer,
+  explain,
+  gradeAnswer,
+  inputFields,
+  isValidCell,
+  pickCell,
+} from '../engine/scoreTable'
 import TableAnswerForm from './TableAnswerForm'
 import TableResult from './TableResult'
 
@@ -18,11 +31,21 @@ const PROMPT: Record<string, string> = {
   oya: '3명이 각각 내는 점수(ALL)를 입력',
 }
 
-function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: ReactNode }) {
-  const base = 'shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition active:scale-95'
-  const cls = on ? 'border-ivory/60 bg-ivory/15 text-ivory' : 'border-ivory/15 text-ivory/60 hover:border-ivory/40'
+function Chip({
+  on,
+  disabled = false,
+  onClick,
+  children,
+}: {
+  on: boolean
+  disabled?: boolean
+  onClick: () => void
+  children: ReactNode
+}) {
+  const base = 'shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-30'
+  const cls = on ? 'border-jade bg-jade/20 text-jade' : 'border-ivory/15 text-ivory/60 hover:border-ivory/40'
   return (
-    <button onClick={onClick} className={`${base} ${cls}`}>
+    <button onClick={onClick} disabled={disabled} className={`${base} ${cls}`}>
       {children}
     </button>
   )
@@ -31,14 +54,6 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
 export type DrillVariant = 'practice' | 'exam'
 
 const EXAM_STAGE = STAGES[STAGES.length - 1] // 전체 무작위
-
-// 단계에 실제로 있는 판수(유효 칸 기준). 예: 25부 론 = 2·3·4
-function stageHans(f: CellFilter): number[] {
-  const hans = cellsFor({ ...f, hans: undefined })
-    .filter((c) => !c.limit)
-    .map((c) => c.han as number)
-  return Array.from(new Set(hans)).sort()
-}
 
 export default function TableDrill({
   variant,
@@ -51,16 +66,10 @@ export default function TableDrill({
 }) {
   const isExam = variant === 'exam'
   const stage = isExam ? EXAM_STAGE : (STAGES.find((s) => s.id === initialStageId) ?? STAGES[0])
-  const availableHans = stageHans(stage.filter)
-  const hasLimits = stage.filter.limits
-
-  // 판수 선택(연습): 기본 전부. 만관 이상 포함 단계는 「만관 이상」 칩도 토글. 마지막 하나는 끌 수 없음.
-  const [hans, setHans] = useState<number[]>(availableHans)
-  const [limitsOn, setLimitsOn] = useState(hasLimits)
   const [showHint, setShowHint] = useState(false)
   const misses = useRef(new Map<string, number>())
 
-  const filter: CellFilter = { ...stage.filter, hans, limits: hasLimits && limitsOn }
+  const filter: CellFilter = stage.filter
   const cells = cellsFor(filter)
 
   const [cell, setCell] = useState<Cell | null>(() => pickCell(cellsFor(filter), new Map()))
@@ -73,20 +82,11 @@ export default function TableDrill({
     setShowHint(false)
   }, [])
 
-  const selectedCount = hans.length + (limitsOn ? 1 : 0)
-
-  const toggleHan = (h: number) => {
-    const on = hans.includes(h)
-    if (on && selectedCount <= 1) return // 마지막 하나는 유지
-    const nextHans = on ? hans.filter((x) => x !== h) : [...hans, h].sort()
-    setHans(nextHans)
-    nextFrom({ ...filter, hans: nextHans }, cell)
-  }
-  const toggleLimits = () => {
-    if (limitsOn && selectedCount <= 1) return
-    const on = !limitsOn
-    setLimitsOn(on)
-    nextFrom({ ...filter, limits: on }, cell)
+  // 판수 라디오(연습): 현재 문제를 같은 자/친·론/쯔모·부수의 다른 판으로 바꿈. 만관 이상 칸이면 만관~역만 라디오.
+  const switchTo = (c: Cell) => {
+    setCell(c)
+    setResult(null)
+    setShowHint(false)
   }
 
   const onSubmit = (input: TableInput) => {
@@ -114,20 +114,24 @@ export default function TableDrill({
         <span> · {cells.length}칸</span>
       </div>
 
-      {/* 판수 선택 — 연습 모드에서 항상 표시 */}
-      {!isExam && availableHans.length + (hasLimits ? 1 : 0) > 1 && (
+      {/* 판수 라디오 — 연습 모드. 현재 문제의 판을 가리키며, 누르면 그 판 문제로 바뀜 */}
+      {!isExam && cell && (
         <div className="flex flex-wrap items-center gap-1.5 rounded-lg bg-felt/60 p-3 ring-1 ring-ivory/10">
-          <span className="mr-1 text-xs text-ivory/50">판수</span>
-          {availableHans.map((h) => (
-            <Chip key={h} on={hans.includes(h)} onClick={() => toggleHan(h)}>
-              {h}판
-            </Chip>
-          ))}
-          {hasLimits && (
-            <Chip on={limitsOn} onClick={toggleLimits}>
-              만관 이상
-            </Chip>
-          )}
+          <span className="mr-1 text-xs text-ivory/50">{cell.limit ? '등급' : '판수'}</span>
+          {cell.limit
+            ? LIMITS.map((l: Limit) => (
+                <Chip key={l} on={cell.limit === l} onClick={() => switchTo({ ...cell, limit: l })}>
+                  {LIMIT_KO[l]}
+                </Chip>
+              ))
+            : [1, 2, 3, 4].map((h) => {
+                const target: Cell = { ...cell, han: h }
+                return (
+                  <Chip key={h} on={cell.han === h} disabled={!isValidCell(target)} onClick={() => switchTo(target)}>
+                    {h}판
+                  </Chip>
+                )
+              })}
         </div>
       )}
 
@@ -161,7 +165,7 @@ export default function TableDrill({
         </div>
       ) : (
         <div className="rounded-xl bg-felt/60 p-4 text-center text-sm text-ivory/50 ring-1 ring-ivory/10">
-          선택한 범위에 칸이 없습니다. 판수를 조정하세요.
+          선택한 범위에 칸이 없습니다.
         </div>
       )}
 
