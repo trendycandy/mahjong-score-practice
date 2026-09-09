@@ -6,21 +6,32 @@ import type { Guess } from './types'
 import HandDisplay from './components/HandDisplay'
 import AnswerForm from './components/AnswerForm'
 import ResultPanel from './components/ResultPanel'
+import TableDrill from './components/TableDrill'
+
+type Mode = 'hand' | 'table'
+interface Stats {
+  correct: number
+  total: number
+  streak: number
+}
+const ZERO: Stats = { correct: 0, total: 0, streak: 0 }
+const bump = (p: Stats, ok: boolean): Stats => ({
+  correct: p.correct + (ok ? 1 : 0),
+  total: p.total + 1,
+  streak: ok ? p.streak + 1 : 0,
+})
 
 export default function App() {
+  const [mode, setMode] = useState<Mode>('hand')
   const [q, setQ] = useState<Generated>(() => generateQuestion(true))
   const [guess, setGuess] = useState<Guess | null>(null)
-  const [stats, setStats] = useState({ correct: 0, total: 0, streak: 0 })
+  const [stats, setStats] = useState<Stats>(ZERO)
+  const [tableStats, setTableStats] = useState<Stats>(ZERO)
   const [showScore, setShowScore] = useState(false)
 
   const onAnswer = (g: Guess) => {
     setGuess(g)
-    const ok = grade(q.scored, g).correct
-    setStats((p) => ({
-      correct: p.correct + (ok ? 1 : 0),
-      total: p.total + 1,
-      streak: ok ? p.streak + 1 : 0,
-    }))
+    setStats((p) => bump(p, grade(q.scored, g).correct))
   }
 
   const next = () => {
@@ -29,18 +40,25 @@ export default function App() {
   }
 
   const scoreTableSrc = `${import.meta.env.BASE_URL}score.png`
+  const shown = mode === 'hand' ? stats : tableStats
 
   return (
     <div className="mx-auto flex min-h-full max-w-md flex-col px-4 pb-8 pt-[max(1rem,env(safe-area-inset-top))] landscape:max-w-2xl">
-      <header className="mb-4 flex items-center justify-between">
+      <header className="mb-4 flex items-center justify-between gap-2">
         <h1 className="text-base font-bold tracking-tight">
-          리치마작 점수계산 <span className="text-jade">연습</span>
+          {mode === 'hand' ? '리치마작 점수계산' : '점수표'} <span className="text-jade">연습</span>
         </h1>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <div className="text-right font-num text-xs text-ivory/50">
-            <div>정답 {stats.correct}/{stats.total}</div>
-            {stats.streak > 1 && <div className="text-dora">연속 {stats.streak}</div>}
+            <div>정답 {shown.correct}/{shown.total}</div>
+            {shown.streak > 1 && <div className="text-dora">연속 {shown.streak}</div>}
           </div>
+          <button
+            onClick={() => setMode(mode === 'hand' ? 'table' : 'hand')}
+            className="rounded-md border border-jade/40 px-3 py-1.5 text-sm font-medium text-jade transition hover:border-jade active:scale-95"
+          >
+            {mode === 'hand' ? '점수표 연습' : '손패 연습'}
+          </button>
           <button
             onClick={() => setShowScore(true)}
             className="rounded-md border border-ivory/20 px-3 py-1.5 text-sm font-medium text-ivory/80 transition hover:border-jade hover:text-jade active:scale-95"
@@ -51,22 +69,27 @@ export default function App() {
       </header>
 
       <main className="flex flex-1 flex-col gap-6 rounded-2xl bg-surface p-4 ring-1 ring-ivory/5">
-        <section>
-          <div className="mb-3 text-sm font-medium text-ivory/70">이 화료의 점수는?</div>
-          <HandDisplay hand={q.hand} />
-        </section>
-
-        <section className="mt-auto">
-          {guess ? (
-            <ResultPanel hand={q.hand} scored={q.scored} guess={guess} onNext={next} />
-          ) : (
-            <AnswerForm onAnswer={onAnswer} />
-          )}
-        </section>
+        {mode === 'hand' ? (
+          <>
+            <section>
+              <div className="mb-3 text-sm font-medium text-ivory/70">이 화료의 점수는?</div>
+              <HandDisplay hand={q.hand} />
+            </section>
+            <section className="mt-auto">
+              {guess ? (
+                <ResultPanel hand={q.hand} scored={q.scored} guess={guess} onNext={next} />
+              ) : (
+                <AnswerForm onAnswer={onAnswer} />
+              )}
+            </section>
+          </>
+        ) : (
+          <TableDrill onResult={(ok) => setTableStats((p) => bump(p, ok))} />
+        )}
       </main>
 
       <footer className="mt-4 text-center text-xs text-ivory/30">
-        채점 엔진: riichi-ts
+        {mode === 'hand' ? '채점 엔진: riichi-ts' : '기준: 첨부 점수표 (끼리아게 없음)'}
       </footer>
 
       {/* 점수표 팝업 */}
