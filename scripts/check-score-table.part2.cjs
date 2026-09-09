@@ -33,6 +33,8 @@ module.exports = function (T, eq) {
   eq(T.cellsFor(byId('all').filter).length, T.allCells().length, 'all stage = every cell')
   eq(T.cellsFor({ seats: ['ko'], wins: ['ron'], fus: [], limits: false }).length, 0, 'empty fus & no limits → 0')
   eq(T.cellsFor({ seats: ['oya'], wins: ['tsumo'], fus: [20], limits: false }).map(T.cellKey), ['oya/tsumo/20/2', 'oya/tsumo/20/3', 'oya/tsumo/20/4'], 'filter oya tsumo 20')
+  eq(T.cellsFor({ seats: ['ko'], wins: ['ron'], fus: [30], limits: false, hans: [2, 4] }).map(T.cellKey), ['ko/ron/30/2', 'ko/ron/30/4'], 'filter hans')
+  eq(T.cellsFor({ seats: ['ko'], wins: ['ron'], fus: [30], limits: true, hans: [1] }).length, 1 + 5, 'hans does not drop limit cells')
 
   // ── 출제 ──
   const cells = T.cellsFor(T.STAGES[0].filter) // 4칸

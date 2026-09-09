@@ -122,6 +122,7 @@ export interface CellFilter {
   wins: WinType[]
   fus: number[]        // 명시 목록(빈 배열=1~4판 칸 없음)
   limits: boolean      // 만관 이상 칸 포함
+  hans?: number[]      // 판수 제한(1~4). 생략=전부. limit 칸엔 적용 안 함
 }
 
 export interface Stage {
@@ -177,6 +178,7 @@ export function cellsFor(f: CellFilter): Cell[] {
   return allCells().filter((c) => {
     if (!f.seats.includes(c.seat) || !f.wins.includes(c.win)) return false
     if (c.limit) return f.limits
+    if (f.hans && !f.hans.includes(c.han as number)) return false
     return f.fus.includes(c.fu as number)
   })
 }

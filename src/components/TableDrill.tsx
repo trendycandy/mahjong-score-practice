@@ -1,18 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { Answer, Cell, CellFilter, Explanation, Seat, TableGrade, TableInput, WinType } from '../engine/scoreTable'
-import {
-  FU_LIST,
-  STAGES,
-  cellKey,
-  cellLabel,
-  cellsFor,
-  computeAnswer,
-  explain,
-  gradeAnswer,
-  inputFields,
-  pickCell,
-} from '../engine/scoreTable'
+import type { Answer, Cell, CellFilter, Explanation, TableGrade, TableInput } from '../engine/scoreTable'
+import { STAGES, cellKey, cellLabel, cellsFor, computeAnswer, explain, gradeAnswer, inputFields, pickCell } from '../engine/scoreTable'
 import TableAnswerForm from './TableAnswerForm'
 import TableResult from './TableResult'
 
@@ -29,23 +18,9 @@ const PROMPT: Record<string, string> = {
   oya: '3명이 각각 내는 점수(ALL)를 입력',
 }
 
-function Chip({
-  on,
-  onClick,
-  children,
-  tone = 'plain',
-}: {
-  on: boolean
-  onClick: () => void
-  children: ReactNode
-  tone?: 'plain' | 'stage'
-}) {
+function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: ReactNode }) {
   const base = 'shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition active:scale-95'
-  const cls = on
-    ? tone === 'stage'
-      ? 'border-jade bg-jade/20 text-jade'
-      : 'border-ivory/60 bg-ivory/15 text-ivory'
-    : 'border-ivory/15 text-ivory/60 hover:border-ivory/40'
+  const cls = on ? 'border-ivory/60 bg-ivory/15 text-ivory' : 'border-ivory/15 text-ivory/60 hover:border-ivory/40'
   return (
     <button onClick={onClick} className={`${base} ${cls}`}>
       {children}
@@ -53,15 +28,17 @@ function Chip({
   )
 }
 
-// 자/친·론/쯔모 토글. 마지막 하나는 끌 수 없음(범위가 비지 않게).
-function toggleKeepOne<T>(arr: T[], v: T): T[] {
-  if (!arr.includes(v)) return [...arr, v]
-  return arr.length > 1 ? arr.filter((x) => x !== v) : arr
-}
-
 export type DrillVariant = 'practice' | 'exam'
 
 const EXAM_STAGE = STAGES[STAGES.length - 1] // 전체 무작위
+
+// 단계에 실제로 있는 판수(유효 칸 기준). 예: 25부 론 = 2·3·4
+function stageHans(f: CellFilter): number[] {
+  const hans = cellsFor({ ...f, hans: undefined })
+    .filter((c) => !c.limit)
+    .map((c) => c.han as number)
+  return Array.from(new Set(hans)).sort()
+}
 
 export default function TableDrill({
   variant,
@@ -73,16 +50,21 @@ export default function TableDrill({
   onResult: (correct: boolean) => void
 }) {
   const isExam = variant === 'exam'
-  const initial = isExam ? EXAM_STAGE : (STAGES.find((s) => s.id === initialStageId) ?? STAGES[0])
-  const [stageId, setStageId] = useState<string | null>(initial.id)
-  const [filter, setFilter] = useState<CellFilter>(initial.filter)
+  const stage = isExam ? EXAM_STAGE : (STAGES.find((s) => s.id === initialStageId) ?? STAGES[0])
+  const availableHans = stageHans(stage.filter)
+  const hasLimits = stage.filter.limits
+
+  // 판수 선택(연습): 기본 전부. 만관 이상 포함 단계는 「만관 이상」 칩도 토글. 마지막 하나는 끌 수 없음.
+  const [hans, setHans] = useState<number[]>(availableHans)
+  const [limitsOn, setLimitsOn] = useState(hasLimits)
   const [showHint, setShowHint] = useState(false)
   const misses = useRef(new Map<string, number>())
-  const [cell, setCell] = useState<Cell | null>(() => pickCell(cellsFor(initial.filter), new Map()))
-  const [result, setResult] = useState<Result | null>(null)
 
+  const filter: CellFilter = { ...stage.filter, hans, limits: hasLimits && limitsOn }
   const cells = cellsFor(filter)
-  const stage = STAGES.find((s) => s.id === stageId) ?? null
+
+  const [cell, setCell] = useState<Cell | null>(() => pickCell(cellsFor(filter), new Map()))
+  const [result, setResult] = useState<Result | null>(null)
 
   const nextFrom = useCallback((f: CellFilter, prev: Cell | null) => {
     const pool = cellsFor(f)
@@ -91,11 +73,20 @@ export default function TableDrill({
     setShowHint(false)
   }, [])
 
-  const updateFilter = (patch: Partial<CellFilter>) => {
-    const f = { ...filter, ...patch }
-    setStageId(null) // 자유 선택
-    setFilter(f)
-    nextFrom(f, cell)
+  const selectedCount = hans.length + (limitsOn ? 1 : 0)
+
+  const toggleHan = (h: number) => {
+    const on = hans.includes(h)
+    if (on && selectedCount <= 1) return // 마지막 하나는 유지
+    const nextHans = on ? hans.filter((x) => x !== h) : [...hans, h].sort()
+    setHans(nextHans)
+    nextFrom({ ...filter, hans: nextHans }, cell)
+  }
+  const toggleLimits = () => {
+    if (limitsOn && selectedCount <= 1) return
+    const on = !limitsOn
+    setLimitsOn(on)
+    nextFrom({ ...filter, limits: on }, cell)
   }
 
   const onSubmit = (input: TableInput) => {
@@ -118,38 +109,25 @@ export default function TableDrill({
     <div className="flex flex-1 flex-col gap-4">
       {/* 단계 소개 (층 이동은 헤더의 「이전」「홈」) */}
       <div className="text-xs text-ivory/50">
-        <span className="font-medium text-ivory/80">{isExam ? '실전' : stage ? stage.title : '자유 선택'}</span>
-        {isExam ? <span> · 전체 무작위 · 힌트 없음</span> : stage && <span> · {stage.hint}</span>}
+        <span className="font-medium text-ivory/80">{isExam ? '실전' : stage.title}</span>
+        {isExam ? <span> · 전체 무작위 · 힌트 없음</span> : <span> · {stage.hint}</span>}
         <span> · {cells.length}칸</span>
       </div>
 
-      {/* 범위 조정 — 연습 모드에서 항상 표시 */}
-      {!isExam && (
-        <div className="space-y-2 rounded-lg bg-felt/60 p-3 ring-1 ring-ivory/10">
-          <div className="flex flex-wrap gap-1.5">
-            {(['ko', 'oya'] as Seat[]).map((s) => (
-              <Chip key={s} on={filter.seats.includes(s)} onClick={() => updateFilter({ seats: toggleKeepOne(filter.seats, s) })}>
-                {s === 'ko' ? '자' : '친'}
-              </Chip>
-            ))}
-            <span className="w-2" />
-            {(['ron', 'tsumo'] as WinType[]).map((w) => (
-              <Chip key={w} on={filter.wins.includes(w)} onClick={() => updateFilter({ wins: toggleKeepOne(filter.wins, w) })}>
-                {w === 'ron' ? '론' : '쯔모'}
-              </Chip>
-            ))}
-          </div>
-          {/* 부수는 라디오: 누른 것 하나만 선택(단계 프리셋은 여러 개일 수 있음). 「만관 이상」도 같은 줄의 선택지. */}
-          <div className="flex flex-wrap gap-1.5">
-            {FU_LIST.map((f) => (
-              <Chip key={f} on={filter.fus.includes(f)} onClick={() => updateFilter({ fus: [f], limits: false })}>
-                {f}부
-              </Chip>
-            ))}
-            <Chip on={filter.limits} onClick={() => updateFilter({ fus: [], limits: true })}>
+      {/* 판수 선택 — 연습 모드에서 항상 표시 */}
+      {!isExam && availableHans.length + (hasLimits ? 1 : 0) > 1 && (
+        <div className="flex flex-wrap items-center gap-1.5 rounded-lg bg-felt/60 p-3 ring-1 ring-ivory/10">
+          <span className="mr-1 text-xs text-ivory/50">판수</span>
+          {availableHans.map((h) => (
+            <Chip key={h} on={hans.includes(h)} onClick={() => toggleHan(h)}>
+              {h}판
+            </Chip>
+          ))}
+          {hasLimits && (
+            <Chip on={limitsOn} onClick={toggleLimits}>
               만관 이상
             </Chip>
-          </div>
+          )}
         </div>
       )}
 
@@ -183,7 +161,7 @@ export default function TableDrill({
         </div>
       ) : (
         <div className="rounded-xl bg-felt/60 p-4 text-center text-sm text-ivory/50 ring-1 ring-ivory/10">
-          선택한 범위에 칸이 없습니다. 범위를 조정하세요.
+          선택한 범위에 칸이 없습니다. 판수를 조정하세요.
         </div>
       )}
 
