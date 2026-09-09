@@ -18,16 +18,20 @@ function parseNum(s: string): number | null {
 
 const EMPTY: Record<InputField, string> = { total: '', ko: '', oya: '' }
 
+// 자동 포커스는 마우스/트랙패드 기기에서만. 터치 기기는 포커스 시 키보드가 올라와 화면을 가리므로 사용자가 탭할 때까지 기다린다.
+const canAutoFocus = () =>
+  typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches
+
 export default function TableAnswerForm({ cell, onSubmit }: { cell: Cell; onSubmit: (input: TableInput) => void }) {
   const fields = inputFields(cell)
   const [vals, setVals] = useState<Record<InputField, string>>(EMPTY)
   const firstRef = useRef<HTMLInputElement>(null)
   const key = cellKey(cell)
 
-  // 문제가 바뀌면 입력 초기화 + 첫 칸 포커스
+  // 문제가 바뀌면 입력 초기화 (+ 데스크톱에서만 첫 칸 포커스)
   useEffect(() => {
     setVals(EMPTY)
-    firstRef.current?.focus()
+    if (canAutoFocus()) firstRef.current?.focus()
   }, [key])
 
   const parsed: TableInput = {
