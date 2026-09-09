@@ -9,8 +9,8 @@ import ResultPanel from './components/ResultPanel'
 import TableDrill from './components/TableDrill'
 import type { DrillVariant } from './components/TableDrill'
 
-// hand: 손패 연습 / table-select: 연습·실전 선택 화면 / practice·exam: 점수표 연습 모드
-type Mode = 'hand' | 'table-select' | DrillVariant
+// home: 진입 선택 화면 / hand: 손패 연습 / table-select: 연습·실전 선택 화면 / practice·exam: 점수표 연습 모드
+type Mode = 'home' | 'hand' | 'table-select' | DrillVariant
 interface Stats {
   correct: number
   total: number
@@ -24,7 +24,7 @@ const bump = (p: Stats, ok: boolean): Stats => ({
 })
 
 export default function App() {
-  const [mode, setMode] = useState<Mode>('hand')
+  const [mode, setMode] = useState<Mode>('home')
   const [q, setQ] = useState<Generated>(() => generateQuestion(true))
   const [guess, setGuess] = useState<Guess | null>(null)
   const [stats, setStats] = useState<Stats>(ZERO)
@@ -44,8 +44,9 @@ export default function App() {
 
   const scoreTableSrc = `${import.meta.env.BASE_URL}score.png`
   const shown = mode === 'hand' ? stats : mode === 'exam' ? examStats : practiceStats
-  const titleMain = mode === 'hand' ? '리치마작 점수계산' : '점수표'
+  const titleMain = mode === 'home' ? '리치마작' : mode === 'hand' ? '리치마작 점수계산' : '점수표'
   const titleTag = mode === 'exam' ? '실전' : '연습'
+  const showStats = mode === 'hand' || mode === 'practice' || mode === 'exam'
 
   return (
     <div className="mx-auto flex min-h-full max-w-md flex-col px-4 pb-8 pt-[max(1rem,env(safe-area-inset-top))] landscape:max-w-2xl">
@@ -54,18 +55,20 @@ export default function App() {
           {titleMain} <span className="text-jade">{titleTag}</span>
         </h1>
         <div className="flex items-center gap-2">
-          {mode !== 'table-select' && (
+          {showStats && (
             <div className="text-right font-num text-xs text-ivory/50">
               <div>정답 {shown.correct}/{shown.total}</div>
               {shown.streak > 1 && <div className="text-dora">연속 {shown.streak}</div>}
             </div>
           )}
-          <button
-            onClick={() => setMode(mode === 'hand' ? 'table-select' : 'hand')}
-            className="rounded-md border border-jade/40 px-3 py-1.5 text-sm font-medium text-jade transition hover:border-jade active:scale-95"
-          >
-            {mode === 'hand' ? '점수표 연습' : '손패 연습'}
-          </button>
+          {mode !== 'home' && (
+            <button
+              onClick={() => setMode('home')}
+              className="rounded-md border border-jade/40 px-3 py-1.5 text-sm font-medium text-jade transition hover:border-jade active:scale-95"
+            >
+              홈
+            </button>
+          )}
           <button
             onClick={() => setShowScore(true)}
             className="rounded-md border border-ivory/20 px-3 py-1.5 text-sm font-medium text-ivory/80 transition hover:border-jade hover:text-jade active:scale-95"
@@ -76,7 +79,25 @@ export default function App() {
       </header>
 
       <main className="flex flex-1 flex-col gap-6 rounded-2xl bg-surface p-4 ring-1 ring-ivory/5">
-        {mode === 'hand' ? (
+        {mode === 'home' ? (
+          <section className="flex flex-1 flex-col justify-center gap-3">
+            <div className="mb-1 text-center text-sm font-medium text-ivory/70">무엇을 연습할까요?</div>
+            <button
+              onClick={() => setMode('hand')}
+              className="rounded-xl border border-jade/40 bg-jade/10 p-4 text-left transition hover:border-jade active:scale-[.99]"
+            >
+              <div className="text-lg font-bold text-jade">손패 연습</div>
+              <div className="mt-1 text-xs text-ivory/60">무작위 화료패의 판 · 부 · 점수 맞히기 (부수 내역 해설)</div>
+            </button>
+            <button
+              onClick={() => setMode('table-select')}
+              className="rounded-xl border border-dora/40 bg-dora/10 p-4 text-left transition hover:border-dora active:scale-[.99]"
+            >
+              <div className="text-lg font-bold text-dora">점수표 연습</div>
+              <div className="mt-1 text-xs text-ivory/60">점수표 칸 외우기 — 연습(단계 · 힌트) / 실전(전체 무작위)</div>
+            </button>
+          </section>
+        ) : mode === 'hand' ? (
           <>
             <section>
               <div className="mb-3 text-sm font-medium text-ivory/70">이 화료의 점수는?</div>
@@ -119,7 +140,7 @@ export default function App() {
       </main>
 
       <footer className="mt-4 text-center text-xs text-ivory/30">
-        {mode === 'hand' ? '채점 엔진: riichi-ts' : '기준: 첨부 점수표 (절삭만관 없음)'}
+        {mode === 'home' || mode === 'hand' ? '채점 엔진: riichi-ts' : '기준: 첨부 점수표 (절삭만관 없음)'}
       </footer>
 
       {/* 점수표 팝업 */}
