@@ -114,3 +114,93 @@ export function formatAnswer(c: Cell, a: Answer): string {
   if (c.seat === 'ko') return `${a.ko} / ${a.oya} (계 ${a.total})`
   return `${a.oya} ALL (계 ${a.total})`
 }
+
+// ───────────────────────── 단계 · 필터 ─────────────────────────
+
+export interface CellFilter {
+  seats: Seat[]
+  wins: WinType[]
+  fus: number[]        // 명시 목록(빈 배열=1~4판 칸 없음)
+  limits: boolean      // 만관 이상 칸 포함
+}
+
+export interface Stage {
+  id: string
+  title: string
+  hint: string          // 단계 소개 한 줄(문제 카드 위)
+  filter: CellFilter
+}
+
+const F = (seats: Seat[], wins: WinType[], fus: number[], limits = false): CellFilter => ({ seats, wins, fus, limits })
+
+export const STAGES: Stage[] = [
+  { id: 'ko-ron-30', title: '자 론 30부', hint: '기준이 되는 열. 1000·2000·3900(장쿠)·7700(치치이)', filter: F(['ko'], ['ron'], [30]) },
+  { id: 'ko-ron-25-50', title: '자 론 25/50부', hint: '25부 = 50부에서 한 판 내림. 1600·3200·6400', filter: F(['ko'], ['ron'], [25, 50]) },
+  { id: 'ko-ron-40', title: '자 론 40부', hint: '30부와 50부 사이. 1300·2600·5200', filter: F(['ko'], ['ron'], [40]) },
+  { id: 'ko-ron-derived', title: '자 론 60/80/100부', hint: '한 판 올려 30/40/50부로 계산', filter: F(['ko'], ['ron'], [60, 80, 100]) },
+  { id: 'ko-ron-rest', title: '자 론 70/90/110부', hint: '유도 규칙 없음 — 그대로 외우기', filter: F(['ko'], ['ron'], [70, 90, 110]) },
+  { id: 'ko-tsumo-30', title: '자 쯔모 30부', hint: '친 몫 = 한 판 낮춘 론, 자 몫 = 두 판 낮춘 론', filter: F(['ko'], ['tsumo'], [30]) },
+  { id: 'ko-tsumo-core', title: '자 쯔모 20/25/40/50부', hint: '20부는 한 판 내려 40부로', filter: F(['ko'], ['tsumo'], [20, 25, 40, 50]) },
+  { id: 'ko-tsumo-rest', title: '자 쯔모 60~110부', hint: '60/80/100부는 한 판 올려 30/40/50부로', filter: F(['ko'], ['tsumo'], [60, 70, 80, 90, 100, 110]) },
+  { id: 'oya-ron', title: '친 론', hint: '자 론의 1.5배. 자 30부 2·3·4판 = 친 40부 1·2·3판', filter: F(['oya'], ['ron'], FU_LIST) },
+  { id: 'oya-tsumo', title: '친 쯔모', hint: '자 쯔모 때 친이 내는 몫을 3명 전원에게', filter: F(['oya'], ['tsumo'], FU_LIST) },
+  { id: 'limits', title: '만관 이상', hint: '만관 8000/12000 · 하네만 · 배만 · 삼배만 · 역만', filter: F(['ko', 'oya'], ['ron', 'tsumo'], [], true) },
+  { id: 'all', title: '전체 무작위', hint: '점수표 전 칸', filter: F(['ko', 'oya'], ['ron', 'tsumo'], FU_LIST, true) },
+]
+
+export function cellsFor(f: CellFilter): Cell[] {
+  return allCells().filter((c) => {
+    if (!f.seats.includes(c.seat) || !f.wins.includes(c.win)) return false
+    if (c.limit) return f.limits
+    return f.fus.includes(c.fu as number)
+  })
+}
+
+// ───────────────────────── 출제 ─────────────────────────
+
+// 가중 무작위: 기본 1, 이번 세션에서 틀린 칸(misses>0)은 3. 직전 칸은 2칸 이상일 때 제외.
+export function pickCell(
+  cells: Cell[],
+  misses: Map<string, number>,
+  prevKey?: string,
+  rand: () => number = Math.random,
+): Cell {
+  const pool = cells.length > 1 && prevKey ? cells.filter((c) => cellKey(c) !== prevKey) : cells
+  const weights = pool.map((c) => ((misses.get(cellKey(c)) ?? 0) > 0 ? 3 : 1))
+  const total = weights.reduce((a, b) => a + b, 0)
+  let r = rand() * total
+  for (let i = 0; i < pool.length; i++) {
+    r -= weights[i]
+    if (r < 0) return pool[i]
+  }
+  return pool[pool.length - 1]
+}
+
+// ───────────────────────── 채점 ─────────────────────────
+
+export interface TableInput {
+  total: number | null
+  ko: number | null
+  oya: number | null
+}
+export interface TableGrade {
+  correct: boolean
+  totalOk: boolean
+  koOk: boolean
+  oyaOk: boolean
+}
+
+export function gradeAnswer(cell: Cell, expected: Answer, input: TableInput): TableGrade {
+  if (cell.win === 'ron') {
+    const ok = input.total === expected.total
+    return { correct: ok, totalOk: ok, koOk: true, oyaOk: true }
+  }
+  if (cell.seat === 'ko') {
+    const koOk = input.ko === expected.ko
+    const oyaOk = input.oya === expected.oya
+    const ok = koOk && oyaOk
+    return { correct: ok, totalOk: ok, koOk, oyaOk }
+  }
+  const oyaOk = input.oya === expected.oya
+  return { correct: oyaOk, totalOk: oyaOk, koOk: true, oyaOk }
+}
