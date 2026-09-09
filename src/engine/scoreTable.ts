@@ -204,3 +204,110 @@ export function gradeAnswer(cell: Cell, expected: Answer, input: TableInput): Ta
   const oyaOk = input.oya === expected.oya
   return { correct: oyaOk, totalOk: oyaOk, koOk: true, oyaOk }
 }
+
+// ───────────────────────── 해설 ─────────────────────────
+
+export interface ExplainRow {
+  label: string
+  answer: Answer
+  current: boolean
+}
+export interface Explanation {
+  tips: string[]
+  column: ExplainRow[]   // 같은 seat·win·fu 의 1~4판(유효 칸만) / limit 칸이면 5단계
+  sameValue: Cell[]      // 값이 완전히 같은 다른 칸(최대 4)
+}
+
+export function answersEqual(a: Answer, b: Answer): boolean {
+  return a.total === b.total && a.ko === b.ko && a.oya === b.oya
+}
+
+const seq = (c: Cell, hans: number[]) => hans.map((h) => computeAnswer({ ...c, han: h }).total).join('·')
+const koRon = (fu: number): Cell => ({ seat: 'ko', win: 'ron', han: 1, fu, limit: null })
+
+function fuTips(c: Cell): string[] {
+  const fu = c.fu as number
+  const han = c.han as number
+  const tips: string[] = []
+  switch (fu) {
+    case 30:
+      tips.push(`30부가 기준 열. 자 론 ${seq(koRon(30), [1, 2, 3, 4])} — 판마다 약 2배. 3900은 「장쿠」, 7700은 「치치이」.`)
+      break
+    case 25:
+    case 50:
+      tips.push(`25부는 50부에서 한 판 내린 값. 올림이 없어 2의 배수로 깔끔: 자 론 ${seq(koRon(25), [2, 3, 4])} (50부 1~3판과 동일).`)
+      break
+    case 40:
+      tips.push(`40부는 30부와 50부 사이: 자 론 ${seq(koRon(40), [1, 2, 3])} — 정확히 2배씩.`)
+      break
+    case 20:
+      tips.push('20부(핑후 쯔모)는 한 판 내려 40부로 계산. 20부 3판 쯔모 700/1300 = 40부 2판 쯔모.')
+      break
+    case 60:
+      tips.push('60부는 한 판 올려 30부로 계산. 60부 2판 = 30부 3판 = 3900(자 론).')
+      break
+    case 80:
+      tips.push('80부는 한 판 올려 40부로 계산. 80부 1판 = 40부 2판 = 2600(자 론).')
+      break
+    case 100:
+      tips.push('100부는 한 판 올려 50부로 계산. 100부 1판 = 50부 2판 = 3200(자 론).')
+      break
+    default:
+      tips.push(`${fu}부는 유도 규칙이 없어 그대로 외운다.`)
+  }
+  if ((fu === 30 && han === 4) || (fu === 60 && han === 3)) {
+    tips.push(`만관으로 치는 룰도 있지만 이 표는 ${c.seat === 'oya' ? '11600' : '7700'} (끼리아게 없음).`)
+  }
+  return tips
+}
+
+function situationTips(c: Cell, expected: Answer): string[] {
+  const tips: string[] = []
+  const han = c.han as number
+  if (c.win === 'tsumo' && c.seat === 'ko') {
+    const r1: Cell = { ...c, win: 'ron', han: han - 1 }
+    const r2: Cell = { ...c, win: 'ron', han: han - 2 }
+    if (han >= 2 && isValidCell(r1)) tips.push(`친 몫 ${expected.oya} = 한 판 낮춘 론(${c.fu}부 ${han - 1}판) 점수.`)
+    if (han >= 3 && isValidCell(r2))
+      tips.push(`자 몫 ${expected.ko} = 두 판 낮춘 론(${c.fu}부 ${han - 2}판) 점수. 친 몫의 절반에 가깝다.`)
+    if (tips.length === 0)
+      tips.push(`자 몫 ${expected.ko}, 친 몫 ${expected.oya}. 친 몫은 자 몫의 약 2배(올림 때문에 딱 2배가 아닐 수 있음).`)
+  } else if (c.win === 'tsumo' && c.seat === 'oya') {
+    const koT = computeAnswer({ ...c, seat: 'ko' })
+    tips.push(`친 쯔모 ALL ${expected.oya} = 자 쯔모 때 친이 내는 몫(${koT.oya})을 3명 전원에게.`)
+  } else if (c.win === 'ron' && c.seat === 'oya') {
+    const koR = computeAnswer({ ...c, seat: 'ko' })
+    tips.push(`친 론은 자 론의 1.5배: 자 ${koR.total} × 1.5 = ${koR.total * 1.5} → 올림 ${expected.total}.`)
+  }
+  return tips
+}
+
+function limitTips(c: Cell): string[] {
+  const l = c.limit as Limit
+  const koC: Cell = { ...c, seat: 'ko' }
+  const oyaC: Cell = { ...c, seat: 'oya' }
+  const tips = [`${LIMIT_KO[l]} = ${LIMIT_HAN_KO[l]}. 자 ${formatAnswer(koC, computeAnswer(koC))} / 친 ${formatAnswer(oyaC, computeAnswer(oyaC))}.`]
+  if (l === 'mangan') tips.push('만관부터는 부수 무관. 만관 → 하네만 → 배만 → 삼배만 → 역만 = 8000 → 12000 → 16000 → 24000 → 32000 (자 론).')
+  return tips
+}
+
+export function explain(cell: Cell, expected: Answer): Explanation {
+  const tips = cell.limit ? limitTips(cell) : [...fuTips(cell), ...situationTips(cell, expected)]
+
+  const column: ExplainRow[] = cell.limit
+    ? LIMITS.map((limit) => {
+        const c: Cell = { ...cell, limit }
+        return { label: LIMIT_KO[limit], answer: computeAnswer(c), current: limit === cell.limit }
+      })
+    : [1, 2, 3, 4]
+        .map((han) => ({ ...cell, han }))
+        .filter(isValidCell)
+        .map((c) => ({ label: `${c.han}판`, answer: computeAnswer(c), current: c.han === cell.han }))
+
+  const me = cellKey(cell)
+  const sameValue = allCells()
+    .filter((c) => cellKey(c) !== me && answersEqual(computeAnswer(c), expected))
+    .slice(0, 4)
+
+  return { tips, column, sameValue }
+}

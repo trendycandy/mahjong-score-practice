@@ -47,4 +47,50 @@ module.exports = function (T, eq) {
   const ot = cell('oya', 'tsumo', 2, 30)
   eq(T.gradeAnswer(ot, T.computeAnswer(ot), { total: null, ko: null, oya: 1000 }).correct, true, 'grade oya tsumo ok')
   eq(T.gradeAnswer(ot, T.computeAnswer(ot), { total: null, ko: null, oya: 3000 }).correct, false, 'grade oya tsumo total≠ALL')
+  // ── 해설 ──
+  const ex1 = T.explain(cell('ko', 'ron', 3, 30), T.computeAnswer(cell('ko', 'ron', 3, 30)))
+  eq(ex1.column.map((r) => r.label), ['1판', '2판', '3판', '4판'], 'column labels 30')
+  eq(ex1.column.map((r) => r.answer.total), [1000, 2000, 3900, 7700], 'column values 30')
+  eq(ex1.column.map((r) => r.current), [false, false, true, false], 'column current')
+  eq(ex1.tips.some((t) => t.includes('장쿠')), true, 'tip mentions 장쿠')
+  eq(ex1.sameValue.map(T.cellKey), ['ko/ron/60/2', 'oya/ron/40/2', 'oya/ron/80/1'], 'sameValue 3900 cells')
+
+  const ex25 = T.explain(cell('ko', 'ron', 2, 25), T.computeAnswer(cell('ko', 'ron', 2, 25)))
+  eq(ex25.column.map((r) => r.label), ['2판', '3판', '4판'], 'column skips invalid 25/1')
+  eq(ex25.tips.some((t) => t.includes('50부')), true, 'tip 25 → 50부')
+
+  const exKT = T.explain(cell('ko', 'tsumo', 4, 30), T.computeAnswer(cell('ko', 'tsumo', 4, 30)))
+  eq(exKT.tips.some((t) => t.includes('3900') && t.includes('3판')), true, 'ko tsumo tip: oya share = ron han-1')
+  eq(exKT.tips.some((t) => t.includes('2000') && t.includes('2판')), true, 'ko tsumo tip: ko share = ron han-2')
+
+  const exOT = T.explain(cell('oya', 'tsumo', 3, 30), T.computeAnswer(cell('oya', 'tsumo', 3, 30)))
+  eq(exOT.tips.some((t) => t.includes('2000') && t.includes('3명')), true, 'oya tsumo tip ALL = ko tsumo oya share')
+
+  const exOR = T.explain(cell('oya', 'ron', 2, 40), T.computeAnswer(cell('oya', 'ron', 2, 40)))
+  eq(exOR.tips.some((t) => t.includes('1.5배')), true, 'oya ron tip 1.5x')
+  eq(exOR.sameValue.map(T.cellKey), ['ko/ron/30/3', 'ko/ron/60/2', 'oya/ron/80/1'], 'oya 40/2 same-value cells')
+
+  const exStar = T.explain(cell('ko', 'ron', 4, 30), T.computeAnswer(cell('ko', 'ron', 4, 30)))
+  eq(exStar.tips.some((t) => t.includes('만관으로')), true, 'starred cell tip')
+
+  const limCell = { seat: 'oya', win: 'ron', han: null, fu: null, limit: 'haneman' }
+  const exLim = T.explain(limCell, T.computeAnswer(limCell))
+  eq(exLim.column.map((r) => r.label), ['만관', '하네만', '배만', '삼배만', '역만'], 'limit column')
+  eq(exLim.column[1].current, true, 'limit current')
+  eq(exLim.tips.some((t) => t.includes('6~7판')), true, 'limit tip han range')
+
+  // ── 팁 항등식(전 칸) ──
+  for (const c of T.allCells()) {
+    if (c.limit) continue
+    const a = T.computeAnswer(c)
+    if (c.win === 'tsumo' && c.seat === 'ko') {
+      const r1 = { ...c, win: 'ron', han: c.han - 1 }
+      const r2 = { ...c, win: 'ron', han: c.han - 2 }
+      if (c.han >= 2) eq(a.oya, T.computeAnswer(r1).total, `identity oya share = ron han-1 @${T.cellKey(c)}`)
+      if (c.han >= 3) eq(a.ko, T.computeAnswer(r2).total, `identity ko share = ron han-2 @${T.cellKey(c)}`)
+    }
+    if (c.win === 'tsumo' && c.seat === 'oya') {
+      eq(a.oya, T.computeAnswer({ ...c, seat: 'ko' }).oya, `identity oya ALL = ko tsumo oya @${T.cellKey(c)}`)
+    }
+  }
 }
