@@ -1,5 +1,5 @@
 // 점수표 연습용 순수 모듈 (UI·riichi-ts 비의존).
-// 기준: public/score.png — 표준 공식, 끼리아게 없음(30부 4판 7700/11600, 60부 3판 7700/11600).
+// 기준: public/score.png — 표준 공식, 절삭만관 없음(30부 4판 7700/11600, 60부 3판 7700/11600).
 
 export type Seat = 'ko' | 'oya'          // 자 / 친
 export type WinType = 'ron' | 'tsumo'
@@ -256,7 +256,7 @@ function fuTips(c: Cell): string[] {
       tips.push(`${fu}부는 유도 규칙이 없어 그대로 외운다.`)
   }
   if ((fu === 30 && han === 4) || (fu === 60 && han === 3)) {
-    tips.push(`만관으로 치는 룰도 있지만 이 표는 ${c.seat === 'oya' ? '11600' : '7700'} (끼리아게 없음).`)
+    tips.push(`만관으로 치는 룰도 있지만 이 표는 ${c.seat === 'oya' ? '11600' : '7700'} (절삭만관 없음).`)
   }
   return tips
 }
