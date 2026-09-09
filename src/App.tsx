@@ -7,8 +7,10 @@ import HandDisplay from './components/HandDisplay'
 import AnswerForm from './components/AnswerForm'
 import ResultPanel from './components/ResultPanel'
 import TableDrill from './components/TableDrill'
+import type { DrillVariant } from './components/TableDrill'
 
-type Mode = 'hand' | 'table'
+// hand: 손패 연습 / table-select: 연습·실전 선택 화면 / practice·exam: 점수표 연습 모드
+type Mode = 'hand' | 'table-select' | DrillVariant
 interface Stats {
   correct: number
   total: number
@@ -26,7 +28,8 @@ export default function App() {
   const [q, setQ] = useState<Generated>(() => generateQuestion(true))
   const [guess, setGuess] = useState<Guess | null>(null)
   const [stats, setStats] = useState<Stats>(ZERO)
-  const [tableStats, setTableStats] = useState<Stats>(ZERO)
+  const [practiceStats, setPracticeStats] = useState<Stats>(ZERO)
+  const [examStats, setExamStats] = useState<Stats>(ZERO)
   const [showScore, setShowScore] = useState(false)
 
   const onAnswer = (g: Guess) => {
@@ -40,21 +43,25 @@ export default function App() {
   }
 
   const scoreTableSrc = `${import.meta.env.BASE_URL}score.png`
-  const shown = mode === 'hand' ? stats : tableStats
+  const shown = mode === 'hand' ? stats : mode === 'exam' ? examStats : practiceStats
+  const titleMain = mode === 'hand' ? '리치마작 점수계산' : '점수표'
+  const titleTag = mode === 'exam' ? '실전' : '연습'
 
   return (
     <div className="mx-auto flex min-h-full max-w-md flex-col px-4 pb-8 pt-[max(1rem,env(safe-area-inset-top))] landscape:max-w-2xl">
       <header className="mb-4 flex items-center justify-between gap-2">
         <h1 className="text-base font-bold tracking-tight">
-          {mode === 'hand' ? '리치마작 점수계산' : '점수표'} <span className="text-jade">연습</span>
+          {titleMain} <span className="text-jade">{titleTag}</span>
         </h1>
         <div className="flex items-center gap-2">
-          <div className="text-right font-num text-xs text-ivory/50">
-            <div>정답 {shown.correct}/{shown.total}</div>
-            {shown.streak > 1 && <div className="text-dora">연속 {shown.streak}</div>}
-          </div>
+          {mode !== 'table-select' && (
+            <div className="text-right font-num text-xs text-ivory/50">
+              <div>정답 {shown.correct}/{shown.total}</div>
+              {shown.streak > 1 && <div className="text-dora">연속 {shown.streak}</div>}
+            </div>
+          )}
           <button
-            onClick={() => setMode(mode === 'hand' ? 'table' : 'hand')}
+            onClick={() => setMode(mode === 'hand' ? 'table-select' : 'hand')}
             className="rounded-md border border-jade/40 px-3 py-1.5 text-sm font-medium text-jade transition hover:border-jade active:scale-95"
           >
             {mode === 'hand' ? '점수표 연습' : '손패 연습'}
@@ -83,8 +90,31 @@ export default function App() {
               )}
             </section>
           </>
+        ) : mode === 'table-select' ? (
+          <section className="flex flex-1 flex-col justify-center gap-3">
+            <div className="mb-1 text-center text-sm font-medium text-ivory/70">어떻게 연습할까요?</div>
+            <button
+              onClick={() => setMode('practice')}
+              className="rounded-xl border border-jade/40 bg-jade/10 p-4 text-left transition hover:border-jade active:scale-[.99]"
+            >
+              <div className="text-lg font-bold text-jade">연습</div>
+              <div className="mt-1 text-xs text-ivory/60">단계별 출제 · 범위 조정 · 힌트 보기 · 채점 후 해설</div>
+            </button>
+            <button
+              onClick={() => setMode('exam')}
+              className="rounded-xl border border-dora/40 bg-dora/10 p-4 text-left transition hover:border-dora active:scale-[.99]"
+            >
+              <div className="text-lg font-bold text-dora">실전</div>
+              <div className="mt-1 text-xs text-ivory/60">점수표 전 칸 무작위 · 힌트 없음 · 채점 후 해설</div>
+            </button>
+          </section>
         ) : (
-          <TableDrill onResult={(ok) => setTableStats((p) => bump(p, ok))} />
+          <TableDrill
+            key={mode}
+            variant={mode}
+            onResult={(ok) => (mode === 'practice' ? setPracticeStats : setExamStats)((p) => bump(p, ok))}
+            onBack={() => setMode('table-select')}
+          />
         )}
       </main>
 

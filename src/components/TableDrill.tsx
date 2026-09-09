@@ -57,12 +57,26 @@ function toggle<T>(arr: T[], v: T): T[] {
   return arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]
 }
 
-export default function TableDrill({ onResult }: { onResult: (correct: boolean) => void }) {
-  const [stageId, setStageId] = useState<string | null>(STAGES[0].id)
-  const [filter, setFilter] = useState<CellFilter>(STAGES[0].filter)
-  const [showFilter, setShowFilter] = useState(false)
+export type DrillVariant = 'practice' | 'exam'
+
+const EXAM_STAGE = STAGES[STAGES.length - 1] // 전체 무작위
+
+export default function TableDrill({
+  variant,
+  onResult,
+  onBack,
+}: {
+  variant: DrillVariant
+  onResult: (correct: boolean) => void
+  onBack: () => void
+}) {
+  const isExam = variant === 'exam'
+  const initial = isExam ? EXAM_STAGE : STAGES[0]
+  const [stageId, setStageId] = useState<string | null>(initial.id)
+  const [filter, setFilter] = useState<CellFilter>(initial.filter)
+  const [showHint, setShowHint] = useState(false)
   const misses = useRef(new Map<string, number>())
-  const [cell, setCell] = useState<Cell | null>(() => pickCell(cellsFor(STAGES[0].filter), new Map()))
+  const [cell, setCell] = useState<Cell | null>(() => pickCell(cellsFor(initial.filter), new Map()))
   const [result, setResult] = useState<Result | null>(null)
 
   const cells = cellsFor(filter)
@@ -72,6 +86,7 @@ export default function TableDrill({ onResult }: { onResult: (correct: boolean) 
     const pool = cellsFor(f)
     setCell(pool.length ? pickCell(pool, misses.current, prev ? cellKey(prev) : undefined) : null)
     setResult(null)
+    setShowHint(false)
   }, [])
 
   const applyStage = (id: string) => {
@@ -103,34 +118,35 @@ export default function TableDrill({ onResult }: { onResult: (correct: boolean) 
   const next = useCallback(() => nextFrom(filter, cell), [nextFrom, filter, cell])
 
   const promptKey = cell ? (inputFields(cell).length === 2 ? 'ko' : inputFields(cell)[0]) : 'total'
+  const hintTips = cell && showHint ? explain(cell, computeAnswer(cell)).tips : []
 
   return (
     <div className="flex flex-1 flex-col gap-4">
-      {/* 단계 칩 (가로 스크롤) */}
-      <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
-        {STAGES.map((s, i) => (
-          <Chip key={s.id} on={s.id === stageId} onClick={() => applyStage(s.id)} tone="stage">
-            {i + 1}. {s.title}
-          </Chip>
-        ))}
-      </div>
+      {/* 단계 칩 (가로 스크롤) — 연습 모드만 */}
+      {!isExam && (
+        <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
+          {STAGES.map((s, i) => (
+            <Chip key={s.id} on={s.id === stageId} onClick={() => applyStage(s.id)} tone="stage">
+              {i + 1}. {s.title}
+            </Chip>
+          ))}
+        </div>
+      )}
 
-      {/* 단계 소개 + 범위 조정 토글 */}
+      {/* 단계 소개 + 모드 바꾸기 */}
       <div className="flex items-start justify-between gap-2 text-xs text-ivory/50">
         <div>
-          <span className="font-medium text-ivory/80">{stage ? stage.title : '자유 선택'}</span>
-          {stage && <span> · {stage.hint}</span>}
+          <span className="font-medium text-ivory/80">{isExam ? '실전' : stage ? stage.title : '자유 선택'}</span>
+          {isExam ? <span> · 전체 무작위 · 힌트 없음</span> : stage && <span> · {stage.hint}</span>}
           <span> · {cells.length}칸</span>
         </div>
-        <button
-          onClick={() => setShowFilter((v) => !v)}
-          className="shrink-0 underline decoration-ivory/30 hover:text-ivory/80"
-        >
-          {showFilter ? '접기' : '범위 조정'}
+        <button onClick={onBack} className="shrink-0 underline decoration-ivory/30 hover:text-ivory/80">
+          모드 바꾸기
         </button>
       </div>
 
-      {showFilter && (
+      {/* 범위 조정 — 연습 모드에서 항상 표시 */}
+      {!isExam && (
         <div className="space-y-2 rounded-lg bg-felt/60 p-3 ring-1 ring-ivory/10">
           <div className="flex flex-wrap gap-1.5">
             {(['ko', 'oya'] as Seat[]).map((s) => (
@@ -164,6 +180,27 @@ export default function TableDrill({ onResult }: { onResult: (correct: boolean) 
           <div className="text-xs text-ivory/50">이 칸의 점수는?</div>
           <div className="mt-1 text-2xl font-bold tracking-tight text-ivory">{cellLabel(cell)}</div>
           <div className="mt-1 text-xs text-ivory/50">{PROMPT[promptKey]}</div>
+          {!isExam && !result && (
+            <div className="mt-3">
+              {showHint ? (
+                <ul className="space-y-1 text-left text-xs text-ivory/70">
+                  {hintTips.map((t, i) => (
+                    <li key={i} className="flex gap-1.5">
+                      <span className="text-dora">▸</span>
+                      <span>{t}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <button
+                  onClick={() => setShowHint(true)}
+                  className="rounded-full border border-dora/40 px-3 py-1 text-xs font-medium text-dora transition hover:bg-dora/10 active:scale-95"
+                >
+                  힌트 보기
+                </button>
+              )}
+            </div>
+          )}
         </div>
       ) : (
         <div className="rounded-xl bg-felt/60 p-4 text-center text-sm text-ivory/50 ring-1 ring-ivory/10">
